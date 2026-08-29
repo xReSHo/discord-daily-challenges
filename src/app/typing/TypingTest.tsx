@@ -11,6 +11,8 @@ const MISTAKE_GRACE_MS = 500; // after a mistake, further wrong keys within this
 const MIN_WPM = 30; // live speed floor once warmed up
 const WPM_GRACE_SEC = 3; // don't judge speed before this
 const WPM_GRACE_CHARS = 15; // ...or before this many characters typed
+const IDLE_FAIL_MS = 2500; // stop typing for this long and the run is lost
+// (cumulative WPM decays too slowly to catch a fast typist who just stops)
 
 type StartResponse = {
   text: string;
@@ -44,6 +46,7 @@ export function TypingTest({ completedToday }: { completedToday: boolean }) {
   const keystrokesRef = useRef(0);
   const strikesRef = useRef(0);
   const lastStrikeAtRef = useRef(0); // performance.now() of the last counted strike
+  const lastInputAtRef = useRef(0); // performance.now() of the last keystroke
   const submittedRef = useRef(false);
   const typedRef = useRef("");
   const textRef = useRef("");
@@ -77,6 +80,17 @@ export function TypingTest({ completedToday }: { completedToday: boolean }) {
       if (!startRef.current) return;
       const secs = (performance.now() - startRef.current) / 1000;
       setElapsed(secs);
+
+      // Stopped typing entirely — fail fast, don't wait for the cumulative
+      // average to crawl below the floor.
+      if (
+        secs > WPM_GRACE_SEC &&
+        lastInputAtRef.current > 0 &&
+        performance.now() - lastInputAtRef.current > IDLE_FAIL_MS
+      ) {
+        failLocal("You stopped typing — run lost.");
+        return;
+      }
 
       const t = typedRef.current;
       const g = textRef.current;
@@ -134,6 +148,7 @@ export function TypingTest({ completedToday }: { completedToday: boolean }) {
       keystrokesRef.current = 0;
       strikesRef.current = 0;
       lastStrikeAtRef.current = 0;
+      lastInputAtRef.current = 0;
       startRef.current = null;
       typedRef.current = "";
       textRef.current = data.text;
@@ -156,12 +171,14 @@ export function TypingTest({ completedToday }: { completedToday: boolean }) {
     }
     if (phase === "ready" && e.key.length === 1) {
       startRef.current = performance.now();
+      lastInputAtRef.current = performance.now();
       setPhase("typing");
     }
   }
 
   function onChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     if (phase !== "ready" && phase !== "typing") return;
+    lastInputAtRef.current = performance.now();
     const next = e.target.value.slice(0, text.length);
 
     // Any newly-added wrong characters count as ONE strike, and only if we're
