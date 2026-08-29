@@ -1,8 +1,29 @@
-# Daily Challenges — Phase 0 Scaffold
+# Daily Challenges
 
-Next.js (App Router) + NextAuth (Discord login) + Prisma (Postgres) scaffold.
-This is the Phase 0 foundation: no games, no rewards logic yet — just proving
-the environment works end to end.
+Next.js (App Router) + NextAuth (Discord login) + Prisma (Postgres). Wordle /
+Typing / Aim daily games, a weekly boss raid, an admin view, and a support
+widget. Rewards pay out through UnbelievaBoat.
+
+## Scaling / hosting notes
+
+The boss raid is chatty (clicks flush every ~2.5s per fighter). On **Netlify
+free + Supabase free** this is workable for a small server but has two hard
+edges:
+
+1. **Supabase free session pooler caps at ~15 connections.** `DATABASE_URL`
+   pins each function to `connection_limit=1`; if you still see
+   `FATAL: max clients reached`, raise the pool size in the Supabase dashboard
+   (**Settings → Database → Connection pooling → Pool Size**, e.g. 15 → 40).
+2. **DB region.** The project is in `ap-northeast-1` (Tokyo). If your players
+   and host are far from there, every query pays 150–400ms. A fresh Supabase
+   project in a closer region (then `pg_dump | pg_restore`) removes that.
+
+For a bigger crowd, run the app as a **persistent process** instead of
+serverless — e.g. [Koyeb](https://www.koyeb.com) free nano instance, or
+`npm run build && npm start` on the same always-on box as the bot behind a
+free Cloudflare Tunnel. A long-lived process keeps one warm 5-connection pool
+forever: no cold starts, no exhaustion, and the in-process caches actually
+work across every request.
 
 ## What's already wired up
 - Next.js project structure, TypeScript, App Router
