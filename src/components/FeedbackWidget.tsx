@@ -65,85 +65,91 @@ export function FeedbackWidget() {
   }
 
   return (
-    <div className={styles.root}>
-      {open && (
-        <div className={styles.panel} role="dialog" aria-label="Send feedback">
-          <div className={styles.head}>
-            <span className={styles.title}>
-              <LifeBuoy size={15} /> Support
-            </span>
-            <button
-              type="button"
-              className={styles.close}
-              onClick={() => setOpen(false)}
-              aria-label="Close"
-            >
-              <X size={15} />
-            </button>
-          </div>
-
-          {phase === "sent" ? (
-            <p className={styles.done}>
-              Sent — thank you. We read every one.
-            </p>
-          ) : (
-            <>
-              <div className={styles.kinds}>
-                <button
-                  type="button"
-                  className={kind === "bug" ? styles.kindOn : styles.kind}
-                  onClick={() => setKind("bug")}
-                >
-                  <Bug size={14} /> Bug
-                </button>
-                <button
-                  type="button"
-                  className={kind === "idea" ? styles.kindOn : styles.kind}
-                  onClick={() => setKind("idea")}
-                >
-                  <Lightbulb size={14} /> Suggestion
-                </button>
-              </div>
-
-              <textarea
-                ref={textRef}
-                className={styles.text}
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                maxLength={2000}
-                rows={4}
-                placeholder={
-                  kind === "bug"
-                    ? "What happened, and what did you expect?"
-                    : "What would make this better?"
-                }
-              />
-
-              {error && <p className={styles.error}>{error}</p>}
-
-              <button
-                type="button"
-                className={styles.send}
-                onClick={submit}
-                disabled={phase === "sending"}
-              >
-                {phase === "sending" ? "Sending…" : "Send"}
-              </button>
-            </>
-          )}
-        </div>
-      )}
-
+    <>
       <button
         type="button"
-        className={styles.fab}
+        className={styles.trigger}
         onClick={toggle}
         aria-label="Send feedback"
         aria-expanded={open}
       >
-        {open ? <X size={17} /> : <LifeBuoy size={17} />}
-        <span className={styles.fabLabel}>Support</span>
+        <LifeBuoy size={15} />
+        <span className={styles.triggerLabel}>Support</span>
       </button>
-    </div>
+
+      {open && (
+        <>
+          <button
+            type="button"
+            className={styles.scrim}
+            aria-label="Close feedback"
+            onClick={() => setOpen(false)}
+          />
+          <div className={styles.panel} role="dialog" aria-label="Send feedback">
+            <div className={styles.head}>
+              <span className={styles.title}>
+                <LifeBuoy size={15} /> Support
+              </span>
+              <button
+                type="button"
+                className={styles.close}
+                onClick={() => setOpen(false)}
+                aria-label="Close"
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            {phase === "sent" ? (
+              <p className={styles.done}>Sent — thank you. We read every one.</p>
+            ) : (
+              <>
+                <div className={styles.kinds}>
+                  <button
+                    type="button"
+                    className={kind === "bug" ? styles.kindOn : styles.kind}
+                    onClick={() => setKind("bug")}
+                  >
+                    <Bug size={14} /> Bug
+                  </button>
+                  <button
+                    type="button"
+                    className={kind === "idea" ? styles.kindOn : styles.kind}
+                    onClick={() => setKind("idea")}
+                  >
+                    <Lightbulb size={14} /> Suggestion
+                  </button>
+                </div>
+
+                <textarea
+                  ref={textRef}
+                  className={styles.text}
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  maxLength={2000}
+                  rows={4}
+                  placeholder={
+                    kind === "bug"
+                      ? "What happened, and what did you expect?"
+                      : "What would make this better?"
+                  }
+                />
+
+                {error && <p className={styles.error}>{error}</p>}
+
+                <button
+                  type="button"
+                  className={styles.send}
+                  onClick={submit}
+                  disabled={phase === "sending"}
+                >
+                  {phase === "sending" ? "Sending…" : "Send"}
+                </button>
+              </>
+            )}
+          </div>
+        </>
+      )}
+    </>
   );
 }

@@ -29,6 +29,7 @@ export async function AppFrame({
           </Link>
 
           <div className={styles.headerRight}>
+            {user?.discordId && <FeedbackWidget />}
             {showAdmin && (
               <Link href="/admin" className={styles.adminLink} title="Admin">
                 <ShieldAlert size={15} />
@@ -71,8 +72,6 @@ export async function AppFrame({
           <span className="mono">{new Date().getUTCFullYear()}</span>
         </div>
       </footer>
-
-      {user?.discordId && <FeedbackWidget />}
     </>
   );
 }

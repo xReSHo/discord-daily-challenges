@@ -1,61 +1,61 @@
-.root {
-  position: fixed;
-  right: clamp(14px, 3vw, 28px);
-  bottom: clamp(14px, 3vw, 28px);
-  z-index: 60;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 12px;
-}
-
-/* ---------- trigger ---------- */
-.fab {
+/* trigger — lives in the header, styled like the other header links */
+.trigger {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
+  gap: 7px;
+  padding: 0;
   font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.18em;
+  font-weight: 600;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--ink-dim);
-  background: linear-gradient(180deg, var(--raised), var(--panel-2));
-  border: 1px solid var(--line-2);
-  border-radius: 999px;
+  color: var(--ink-mute);
+  background: transparent;
+  border: 0;
   cursor: pointer;
-  box-shadow: var(--shadow);
-  transition:
-    color 0.2s var(--ease),
-    border-color 0.2s var(--ease),
-    box-shadow 0.2s var(--ease);
+  transition: color 0.2s;
 }
 
-.fab:hover,
-.fab:focus-visible {
+.trigger:hover,
+.trigger:focus-visible {
   color: var(--gold-bright);
-  border-color: var(--gold);
-  box-shadow: var(--ring);
 }
 
 @media (max-width: 560px) {
-  .fabLabel {
+  .triggerLabel {
     display: none;
-  }
-  .fab {
-    padding: 12px;
   }
 }
 
-/* ---------- panel ---------- */
+/* scrim — click-away close, sits under the panel */
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  border: 0;
+  background: transparent;
+  cursor: default;
+}
+
+/* panel — fixed dropdown from the top-right, under the header */
 .panel {
-  width: min(88vw, 320px);
+  position: fixed;
+  z-index: 71;
+  top: 68px;
+  right: clamp(10px, 3vw, 26px);
+  width: min(92vw, 320px);
   padding: 16px;
   background: linear-gradient(180deg, var(--panel), var(--panel-2)), var(--bg);
   border: 1px solid var(--line-2);
   border-radius: var(--r-lg);
   box-shadow: var(--shadow);
-  animation: rise 0.28s var(--ease) both;
+  animation: rise 0.24s var(--ease) both;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
 }
 
 .head {
