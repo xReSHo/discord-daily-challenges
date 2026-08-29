@@ -57,4 +57,84 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
-// Phase 2+ will add: DailyContent, Completion models here.
+// --- Phase 2: daily content engine + completion tracking ---
+
+/// One row per (day, section). Holds the seeded content a section needs
+/// for that day (e.g. the Wordle word). The Phase 2 dummy section does
+/// not need a payload, but real sections from Phase 3 on will.
+model DailyContent {
+  id        String   @id @default(cuid())
+  /// The challenge day this content belongs to, at 00:00 UTC. The wall-clock
+  /// day is computed in CHALLENGE_TZ (see src/lib/challenge-date.ts).
+  date      DateTime @db.Date
+  section   String
+  payload   Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  @@unique([date, section])
+}
+
+/// One row per (user, section, day). The unique constraint is what makes
+/// "once per day" impossible to violate even under concurrent requests.
+model Completion {
+  id           String   @id @default(cuid())
+  discordId    String
+  section      String
+  date         DateTime @db.Date
+  /// Whether the UnbelievaBoat payout succeeded. A row with rewarded=false
+  /// means the completion landed but the payout call failed; it is cleaned
+  /// up so the user can retry (see src/lib/completions.ts).
+  rewarded     Boolean  @default(false)
+  rewardAmount Int
+  createdAt    DateTime @default(now())
+
+  @@unique([discordId, section, date])
+  @@index([discordId, date])
+}
+
+// --- Phase 3: Wordle ---
+
+/// One row per (user, day). Stores only the raw guesses; per-letter results
+/// are recomputed server-side from the daily word, so the answer never needs
+/// to live in this table. `finished` caps the game at MAX_GUESSES.
+model WordleGame {
+  discordId String
+  date      DateTime @db.Date
+  guesses   String[] @default([])
+  won       Boolean  @default(false)
+  finished  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@id([discordId, date])
+}
+
+// --- Phase 7: rate limiting + anti-cheat audit log ---
+
+/// Fixed-window rate-limit counter. `id` is `"<key>@<windowStartMs>"` so a
+/// single upsert both creates the window and increments it. Old rows are
+/// swept opportunistically (see src/lib/rate-limit.ts); the table is safe to
+/// truncate at any time.
+model RateLimit {
+  id          String   @id
+  key         String
+  windowStart DateTime
+  count       Int      @default(0)
+
+  @@index([windowStart])
+}
+
+/// An attempt the anti-cheat checks rejected as implausible — not benign
+/// failures like "session expired" or "didn't finish". Surfaced on /admin.
+model SuspiciousAttempt {
+  id        String   @id @default(cuid())
+  discordId String
+  section   String
+  reason    String
+  detail    Json     @default("{}")
+  date      DateTime @db.Date
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([discordId, createdAt])
+}

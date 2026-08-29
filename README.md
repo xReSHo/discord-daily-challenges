@@ -78,6 +78,28 @@ Visit http://localhost:3000 -- you should see the "Phase 0" placeholder page.
 5. Go back to the Discord Developer Portal and add a **second** redirect URI:
    `https://yourapp.vercel.app/api/auth/callback/discord`
 
+## Phase 7 — hardening (rate limiting + admin/audit)
+
+After pulling these changes, push the two new tables to your database:
+
+```bash
+npx prisma generate
+npx prisma db push
+```
+
+This adds `RateLimit` (fixed-window API rate-limit counters) and
+`SuspiciousAttempt` (the anti-cheat audit log). Both are safe to truncate.
+
+- **Rate limiting** — every API route and the `mark complete` action call
+  `src/lib/rate-limit.ts`. Limits are per client (Discord id when logged in,
+  else IP) per minute; tune them with the `RATE_LIMIT_*` env vars.
+- **Admin view** — `/admin` shows completions, payouts and flagged attempts.
+  Gated to the Discord ids in `ADMIN_DISCORD_IDS`. A link appears in the
+  header only for those users.
+- **Audit log** — the typing and aim anti-cheat checks call
+  `flagAttempt(...)` (`src/lib/audit.ts`) whenever they reject a submission
+  as implausible. Benign failures (slow, unfinished, expired) are not logged.
+
 ## Phase 0 checklist
 - [ ] `node scripts/test-unbelievaboat.mjs` succeeds and balance updates in Discord
 - [ ] `npx prisma db push` succeeds, tables visible in Supabase
