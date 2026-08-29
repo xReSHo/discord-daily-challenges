@@ -40,6 +40,8 @@ export const RATE_RULES = {
   start: ruleFromEnv("RATE_LIMIT_START", 12),
   /** The NextAuth endpoints (sign in / callback / session). */
   auth: ruleFromEnv("RATE_LIMIT_AUTH", 20),
+  /** Boss arena — polled ~every 2s and click-batches flushed ~every 1s. */
+  boss: ruleFromEnv("RATE_LIMIT_BOSS", 150),
 } as const;
 
 const denyUntil = new Map<string, number>();

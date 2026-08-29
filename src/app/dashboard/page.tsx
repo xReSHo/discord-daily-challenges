@@ -9,13 +9,23 @@ import {
   Grid3x3,
   Keyboard,
   ShieldCheck,
+  Swords,
   type LucideIcon,
 } from "lucide-react";
 import { getCompletedSectionsToday } from "@/lib/completions";
 import { getChallengeDateString } from "@/lib/challenge-date";
 import { SECTION_IDS, SECTIONS, type SectionId } from "@/lib/sections";
+import { getBossWindow } from "@/lib/boss/window";
+import { BOSS_NAME } from "@/lib/boss/config";
 import { AppFrame } from "@/components/AppFrame";
 import styles from "./dashboard.module.css";
+
+function bossTimeLeft(expiresAt: Date): string {
+  const s = Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
 
 const META: Record<
   SectionId,
@@ -45,10 +55,24 @@ export default async function Dashboard() {
     : new Set<SectionId>();
 
   const doneCount = SECTION_IDS.filter((id) => completed.has(id)).length;
+  const boss = getBossWindow();
 
   return (
     <AppFrame>
       <div className="container">
+        {boss.status === "active" && (
+          <Link href="/boss" className={`panel panel--lit ${styles.bossBanner} rise`}>
+            <Swords size={22} strokeWidth={1.5} className={styles.bossIcon} />
+            <span className={styles.bossText}>
+              <strong>{BOSS_NAME}</strong> stirs — the weekly raid is live
+            </span>
+            <span className={styles.bossMeta}>
+              {bossTimeLeft(boss.expiresAt)} left
+              <ArrowRight size={14} />
+            </span>
+          </Link>
+        )}
+
         <header className={`${styles.head} rise`}>
           <p className="eyebrow">The Trials</p>
           <h1 className={styles.title}>Today&apos;s grace</h1>

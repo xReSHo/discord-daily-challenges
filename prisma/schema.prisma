@@ -141,3 +141,41 @@ model SuspiciousAttempt {
   @@index([createdAt])
   @@index([discordId, createdAt])
 }
+
+// --- Weekly boss raid (Veyrath) ---
+
+/// One row per weekly boss (keyed by the Saturday it spawned). `dealtDamage`
+/// is the denormalised running total across all fighters, so "is it dead?" is
+/// a single indexed read rather than a SUM over BossHit.
+model Boss {
+  id          String    @id @default(cuid())
+  weekOf      DateTime  @unique @db.Date
+  maxHp       Int
+  dealtDamage Float     @default(0)
+  spawnsAt    DateTime
+  expiresAt   DateTime
+  slain       Boolean   @default(false)
+  slainAt     DateTime?
+  resolved    Boolean   @default(false)
+  resolvedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  hits        BossHit[]
+}
+
+/// One row per (boss, fighter). `damage` drives the bounty split; `settled`
+/// marks that the reward or penalty for this fighter has been paid.
+model BossHit {
+  id        String   @id @default(cuid())
+  bossId    String
+  boss      Boss     @relation(fields: [bossId], references: [id], onDelete: Cascade)
+  discordId String
+  damage    Float    @default(0)
+  clicks    Int      @default(0)
+  lastHitAt DateTime @default(now())
+  settled   Boolean  @default(false)
+  payout    Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@unique([bossId, discordId])
+  @@index([bossId])
+}

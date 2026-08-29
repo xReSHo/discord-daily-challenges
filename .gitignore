@@ -17,6 +17,9 @@ next-env.d.ts
 # testing / coverage
 /coverage
 
+# full-res source art — only the optimised public/boss/* is committed
+/boss_images/
+
 # misc
 .DS_Store
 *.pem

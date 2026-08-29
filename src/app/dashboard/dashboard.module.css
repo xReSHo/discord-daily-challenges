@@ -1,3 +1,46 @@
+.bossBanner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 20px;
+  margin-bottom: 28px;
+  text-decoration: none;
+  transition: border-color 0.3s var(--ease), transform 0.3s var(--ease);
+}
+
+.bossBanner:hover {
+  border-color: var(--line-gold);
+  transform: translateY(-2px);
+}
+
+.bossIcon {
+  color: var(--bad-bright);
+  flex-shrink: 0;
+}
+
+.bossText {
+  flex: 1;
+  font-size: 13px;
+  color: var(--ink-dim);
+}
+
+.bossText strong {
+  color: var(--gold-bright);
+  font-weight: 600;
+}
+
+.bossMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  white-space: nowrap;
+}
+
 .head {
   padding-block: 4px 40px;
 }
