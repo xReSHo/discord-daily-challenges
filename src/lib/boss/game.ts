@@ -149,9 +149,24 @@ async function sharedSnapshot(): Promise<SharedSnapshot> {
   return data;
 }
 
+// Self-heal: after the window closes, the first read triggers a settle in the
+// background so payouts don't depend on the bot being up. Throttled per
+// instance; `resolveBoss` is idempotent and race-safe.
+let lastLazyResolve = 0;
+function maybeLazyResolve() {
+  const now = Date.now();
+  if (now - lastLazyResolve < 30_000) return;
+  lastLazyResolve = now;
+  resolveBoss().catch((e) =>
+    logger.error("boss.lazy_resolve_failed", { message: String(e) }),
+  );
+}
+
 export async function getBossState(discordId?: string | null): Promise<BossState> {
   const win = getBossWindow();
   const snap = await sharedSnapshot();
+
+  if (win.status === "ended" && snap.bossId && !snap.resolved) maybeLazyResolve();
 
   let yourDamage = 0;
   let yourPayout: number | null = null;
@@ -384,14 +399,22 @@ export async function resolveBoss(): Promise<ResolveResult> {
       target = "cash";
     }
 
+    // Atomically claim this fighter's slot first: only one caller can flip
+    // settled false -> true, so concurrent resolve calls can't double-pay.
+    const claim = await prisma.bossHit.updateMany({
+      where: { id: h.id, settled: false },
+      data: { settled: true, payout: amount },
+    });
+    if (claim.count === 0) continue; // already handled by another call
+
     try {
       if (amount !== 0) await addCurrency(h.discordId, amount, reason, target);
-      await prisma.bossHit.update({
-        where: { id: h.id },
-        data: { settled: true, payout: amount },
-      });
       totalPaid += Math.abs(amount);
     } catch (err) {
+      // payment failed — release the claim so a retry picks it up
+      await prisma.bossHit
+        .updateMany({ where: { id: h.id }, data: { settled: false, payout: 0 } })
+        .catch(() => {});
       unsettled++;
       logger.error("boss.settle_failed", {
         bossId: boss.id,
