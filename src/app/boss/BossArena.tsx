@@ -12,9 +12,12 @@ import { Coins, Users, Swords, Timer } from "lucide-react";
 import type { BossState, BossLeader, HitResponse } from "@/lib/boss/types";
 import styles from "./boss.module.css";
 
-const POLL_ACTIVE_MS = 2000;
-const POLL_IDLE_MS = 15000;
-const FLUSH_MS = 1000;
+// Kept deliberately low-chatter for a free serverless host: while you're
+// clicking, the flush response IS the poll (it returns full state), so we
+// don't GET /api/boss at all. We only poll when idle, to see the boss die.
+const FLUSH_MS = 2500;
+const POLL_IDLE_MS = 6000;
+const IDLE_AFTER_MS = 3500; // no clicks for this long -> resume idle polling
 const HURT_MS = 130;
 const TICK_MS = 66; // ~15fps display refresh, decoupled from click rate
 
@@ -54,6 +57,7 @@ export function BossArena({ initial }: { initial: BossState }) {
 
   const pendingRef = useRef(0); // clicks not yet sent
   const unackedRef = useRef(0); // clicks in the in-flight request
+  const lastClickRef = useRef(0); // performance.now() of the last accepted click
   const hitTimesRef = useRef<number[]>([]); // accepted clicks, rolling 1s
   const rawTimesRef = useRef<number[]>([]); // every click incl. rejected, for burst detection
   const overCapRef = useRef({ streakStart: 0, lastAt: 0, hits: 0 });
@@ -72,10 +76,18 @@ export function BossArena({ initial }: { initial: BossState }) {
     captchaRef.current = captcha !== null;
   });
 
-  // --- poll shared state ---
+  // --- idle poll (skipped entirely while you're actively fighting) ---
   useEffect(() => {
     let alive = true;
     async function poll() {
+      // during a fight the hit response already carries full state
+      if (
+        pendingRef.current > 0 ||
+        unackedRef.current > 0 ||
+        performance.now() - lastClickRef.current < IDLE_AFTER_MS
+      ) {
+        return;
+      }
       try {
         const res = await fetch("/api/boss", { cache: "no-store" });
         if (!res.ok) return;
@@ -91,10 +103,7 @@ export function BossArena({ initial }: { initial: BossState }) {
       }
     }
     poll();
-    const id = setInterval(
-      poll,
-      server.status === "active" ? POLL_ACTIVE_MS : POLL_IDLE_MS,
-    );
+    const id = setInterval(poll, POLL_IDLE_MS);
     return () => {
       alive = false;
       clearInterval(id);
@@ -117,17 +126,8 @@ export function BossArena({ initial }: { initial: BossState }) {
           body: JSON.stringify({ clicks: n }),
         });
         const data = (await res.json()) as HitResponse;
-        if (data.ok && typeof data.hp === "number") {
-          setServer((prev) => ({
-            ...prev,
-            hp: data.hp!,
-            dealt: data.dealt ?? prev.dealt,
-            slain: data.slain ?? prev.slain,
-            yourDamage: data.yourDamage ?? prev.yourDamage,
-          }));
-        } else if (data.state) {
-          setServer(data.state);
-        }
+        // only one flush is ever in flight, so its state is authoritative
+        if (data.state) setServer(data.state);
       } catch {
         /* dropped batch — poll will re-sync */
       } finally {
@@ -226,6 +226,7 @@ export function BossArena({ initial }: { initial: BossState }) {
     }
 
     pendingRef.current += 1;
+    lastClickRef.current = t;
     flashHurt();
   }, [server.cpsCap, flashHurt, registerOverCap]);
 

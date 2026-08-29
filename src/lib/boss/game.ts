@@ -40,44 +40,65 @@ function clamp(n: number, lo: number, hi: number): number {
 
 // --- lazy row creation (active window only) -------------------------------
 
+// The Boss row's identity (id, maxHp) is fixed for the whole window, so once
+// an instance has resolved it there is no reason to hit the DB again for it.
+let bossRowCache: { weekOf: string; id: string; maxHp: number } | null = null;
+
 async function getOrCreateActiveBoss() {
   const win = getBossWindow();
   if (win.status !== "active") return null;
 
-  const weekOf = new Date(`${win.weekOf}T00:00:00.000Z`);
-  const existing = await prisma.boss.findUnique({ where: { weekOf } });
-  if (existing) return existing;
-
-  try {
-    return await prisma.boss.create({
-      data: {
-        weekOf,
-        maxHp: BOSS_MAX_HP,
-        spawnsAt: win.spawnsAt,
-        expiresAt: win.expiresAt,
-      },
-    });
-  } catch (err) {
-    if (
-      err instanceof Prisma.PrismaClientKnownRequestError &&
-      err.code === "P2002"
-    ) {
-      return prisma.boss.findUniqueOrThrow({ where: { weekOf } });
-    }
-    throw err;
+  if (bossRowCache && bossRowCache.weekOf === win.weekOf) {
+    return { id: bossRowCache.id, maxHp: bossRowCache.maxHp };
   }
+
+  const weekOf = new Date(`${win.weekOf}T00:00:00.000Z`);
+  let row = await prisma.boss.findUnique({
+    where: { weekOf },
+    select: { id: true, maxHp: true },
+  });
+  if (!row) {
+    try {
+      row = await prisma.boss.create({
+        data: {
+          weekOf,
+          maxHp: BOSS_MAX_HP,
+          spawnsAt: win.spawnsAt,
+          expiresAt: win.expiresAt,
+        },
+        select: { id: true, maxHp: true },
+      });
+    } catch (err) {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === "P2002"
+      ) {
+        row = await prisma.boss.findUniqueOrThrow({
+          where: { weekOf },
+          select: { id: true, maxHp: true },
+        });
+      } else {
+        throw err;
+      }
+    }
+  }
+  bossRowCache = { weekOf: win.weekOf, id: row.id, maxHp: row.maxHp };
+  return row;
 }
 
-/** The Boss row for the current or most-recent window, if one exists. */
+/** The full Boss row for the current or most-recent window, if one exists. */
 async function getReferenceBoss() {
   const win = getBossWindow();
   if (win.status === "upcoming") return null;
-  if (win.status === "active") return getOrCreateActiveBoss();
+  if (win.status === "active") {
+    const light = await getOrCreateActiveBoss();
+    return light ? prisma.boss.findUnique({ where: { id: light.id } }) : null;
+  }
   const weekOf = new Date(`${win.weekOf}T00:00:00.000Z`);
   return prisma.boss.findUnique({ where: { weekOf } });
 }
 
-// --- shared snapshot (cached ~1s per instance) ----------------------------
+// --- shared snapshot (cached per instance — see CACHE_MS) -----------------
 
 type SharedSnapshot = {
   bossId: string | null;
@@ -91,11 +112,42 @@ type SharedSnapshot = {
 };
 
 let cache: { at: number; data: SharedSnapshot } | null = null;
-const CACHE_MS = 1000;
+// Shared boss state (hp, participants, leaderboard) is served from this cache;
+// clicks update it live on the client via the hit response, so a few seconds
+// of staleness on other people's numbers is invisible. This is the single
+// biggest lever on DB load under a crowd.
+const CACHE_MS = 5000;
+// Names change essentially never — cache them far longer than the snapshot.
+let nameCache: { at: number; byId: Map<string, { name: string | null; image: string | null }> } | null = null;
+const NAME_CACHE_MS = 120_000;
 
-async function sharedSnapshot(): Promise<SharedSnapshot> {
-  if (cache && Date.now() - cache.at < CACHE_MS) return cache.data;
+let refreshing: Promise<SharedSnapshot> | null = null;
 
+/**
+ * `staleOk` (used by the hit path) returns whatever is cached without waiting,
+ * kicking a background refresh if it's expired — so a click is never slowed
+ * by the 4-query leaderboard read. Reads that need current data (the idle
+ * poll) leave it false and wait.
+ */
+async function sharedSnapshot(staleOk = false): Promise<SharedSnapshot> {
+  const fresh = cache && Date.now() - cache.at < CACHE_MS;
+  if (fresh) return cache!.data;
+  if (staleOk && cache) {
+    if (!refreshing) {
+      refreshing = refreshSnapshot().finally(() => {
+        refreshing = null;
+      });
+    }
+    return cache.data;
+  }
+  if (refreshing) return refreshing;
+  refreshing = refreshSnapshot().finally(() => {
+    refreshing = null;
+  });
+  return refreshing;
+}
+
+async function refreshSnapshot(): Promise<SharedSnapshot> {
   const boss = await getReferenceBoss();
   if (!boss) {
     const empty: SharedSnapshot = {
@@ -122,13 +174,22 @@ async function sharedSnapshot(): Promise<SharedSnapshot> {
     }),
   ]);
 
-  const users = hits.length
-    ? await prisma.user.findMany({
-        where: { discordId: { in: hits.map((h) => h.discordId) } },
-        select: { discordId: true, name: true, image: true },
-      })
-    : [];
-  const byId = new Map(users.map((u) => [u.discordId, u]));
+  const missing =
+    !nameCache || Date.now() - nameCache.at > NAME_CACHE_MS
+      ? hits.map((h) => h.discordId)
+      : hits.map((h) => h.discordId).filter((id) => !nameCache!.byId.has(id));
+  if (missing.length) {
+    const users = await prisma.user.findMany({
+      where: { discordId: { in: missing } },
+      select: { discordId: true, name: true, image: true },
+    });
+    const byId = nameCache && Date.now() - nameCache.at <= NAME_CACHE_MS
+      ? nameCache.byId
+      : new Map();
+    for (const u of users) byId.set(u.discordId, { name: u.name, image: u.image });
+    nameCache = { at: Date.now(), byId };
+  }
+  const byId = nameCache?.byId ?? new Map();
 
   const data: SharedSnapshot = {
     bossId: boss.id,
@@ -162,15 +223,23 @@ function maybeLazyResolve() {
   );
 }
 
-export async function getBossState(discordId?: string | null): Promise<BossState> {
+/**
+ * `fresh` lets `applyHit` skip the per-user query and the snapshot refresh:
+ * it already knows the caller's up-to-the-millisecond hp/damage from its own
+ * writes, and stale leaderboard/participant numbers are fine for a few seconds.
+ */
+export async function getBossState(
+  discordId?: string | null,
+  fresh?: { hp: number; dealt: number; slain: boolean; yourDamage: number },
+): Promise<BossState> {
   const win = getBossWindow();
-  const snap = await sharedSnapshot();
+  const snap = await sharedSnapshot(fresh !== undefined);
 
   if (win.status === "ended" && snap.bossId && !snap.resolved) maybeLazyResolve();
 
-  let yourDamage = 0;
+  let yourDamage = fresh?.yourDamage ?? 0;
   let yourPayout: number | null = null;
-  if (discordId && snap.bossId) {
+  if (!fresh && discordId && snap.bossId) {
     const mine = await prisma.bossHit.findUnique({
       where: { bossId_discordId: { bossId: snap.bossId, discordId } },
       select: { damage: true, settled: true, payout: true },
@@ -181,15 +250,17 @@ export async function getBossState(discordId?: string | null): Promise<BossState
     }
   }
 
-  const hp = Math.max(0, snap.maxHp - snap.dealt);
+  const dealt = fresh?.dealt ?? snap.dealt;
+  const slain = fresh?.slain ?? snap.slain;
+  const hp = fresh?.hp ?? Math.max(0, snap.maxHp - dealt);
 
   return {
     name: BOSS_NAME,
     status: win.status,
     maxHp: snap.maxHp,
     hp,
-    dealt: Math.min(snap.dealt, snap.maxHp),
-    slain: snap.slain,
+    dealt: Math.min(dealt, snap.maxHp),
+    slain,
     slainAt: snap.slainAt,
     resolved: snap.resolved,
     spawnsAt: win.spawnsAt.toISOString(),
@@ -220,24 +291,17 @@ export async function getBossState(discordId?: string | null): Promise<BossState
 const lastHitMs = new Map<string, number>();
 
 export type HitResult =
-  | { ok: false; error: "no_active_boss" | "already_slain"; state: BossState }
-  | {
-      ok: true;
-      hp: number;
-      maxHp: number;
-      dealt: number;
-      slain: boolean;
-      yourDamage: number;
-      applied: number;
-    };
+  | { ok: false; error: "no_active_boss"; state: BossState }
+  | { ok: true; state: BossState; applied: number };
 
 export async function applyHit(
   discordId: string,
   rawClicks: unknown,
 ): Promise<HitResult> {
   const boss = await getOrCreateActiveBoss();
-  if (!boss) return { ok: false, error: "no_active_boss", state: await getBossState(discordId) };
-  if (boss.slain) return { ok: false, error: "already_slain", state: await getBossState(discordId) };
+  if (!boss) {
+    return { ok: false, error: "no_active_boss", state: await getBossState(discordId) };
+  }
 
   const key = `${boss.id}:${discordId}`;
   const now = Date.now();
@@ -267,20 +331,12 @@ export async function applyHit(
   lastHitMs.set(key, now);
 
   if (applied <= 0) {
-    const dealt = Math.min(boss.dealtDamage, boss.maxHp);
-    return {
-      ok: true,
-      hp: Math.max(0, boss.maxHp - dealt),
-      maxHp: boss.maxHp,
-      dealt,
-      slain: boss.slain,
-      yourDamage: 0,
-      applied: 0,
-    };
+    return { ok: true, state: await getBossState(discordId), applied: 0 };
   }
 
   const dmg = applied * BOSS_DMG_PER_CLICK;
 
+  // two writes: the denormalised boss total, and this fighter's tally.
   const updated = await prisma.boss.update({
     where: { id: boss.id },
     data: { dealtDamage: { increment: dmg } },
@@ -289,11 +345,11 @@ export async function applyHit(
 
   let slain = updated.slain;
   if (!slain && updated.dealtDamage >= boss.maxHp) {
-    const res = await prisma.boss.updateMany({
+    await prisma.boss.updateMany({
       where: { id: boss.id, slain: false },
       data: { slain: true, slainAt: new Date() },
     });
-    slain = res.count > 0 || updated.dealtDamage >= boss.maxHp;
+    slain = true;
   }
 
   const mine = await prisma.bossHit.upsert({
@@ -313,19 +369,18 @@ export async function applyHit(
     select: { damage: true },
   });
 
-  // let the shared snapshot refresh on its own cadence
-  cache = null;
-
-  const dealtClamped = Math.min(updated.dealtDamage, boss.maxHp);
-  return {
-    ok: true,
-    hp: Math.max(0, boss.maxHp - dealtClamped),
-    maxHp: boss.maxHp,
-    dealt: dealtClamped,
+  // NB: the snapshot cache is left to expire on its own (CACHE_MS). The
+  // authoritative hp / your-damage below come from the writes just made, so
+  // clients stay accurate; only other people's leaderboard numbers lag a
+  // few seconds, which is invisible.
+  const dealt = Math.min(updated.dealtDamage, boss.maxHp);
+  const state = await getBossState(discordId, {
+    hp: Math.max(0, boss.maxHp - dealt),
+    dealt,
     slain,
-    yourDamage: Math.round(mine.damage * 10) / 10,
-    applied,
-  };
+    yourDamage: mine.damage,
+  });
+  return { ok: true, state, applied };
 }
 
 // --- resolution (bot-triggered, idempotent) ------------------------------

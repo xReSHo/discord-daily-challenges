@@ -18,15 +18,27 @@ import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 
-export type RateRule = { limit: number; windowMs: number };
+export type RateRule = {
+  limit: number;
+  windowMs: number;
+  /** Skip the Postgres counter — use a per-instance sliding window only.
+   *  For very chatty endpoints where the DB write would itself be the load
+   *  and a real abuse cap already lives elsewhere (e.g. the boss CPS clamp). */
+  memoryOnly?: boolean;
+};
 
 const MINUTE = 60_000;
 
-function ruleFromEnv(envName: string, fallbackLimit: number): RateRule {
+function ruleFromEnv(
+  envName: string,
+  fallbackLimit: number,
+  extra: Partial<RateRule> = {},
+): RateRule {
   const n = Number(process.env[envName]);
   return {
     limit: Number.isFinite(n) && n > 0 ? Math.floor(n) : fallbackLimit,
     windowMs: MINUTE,
+    ...extra,
   };
 }
 
@@ -40,11 +52,29 @@ export const RATE_RULES = {
   start: ruleFromEnv("RATE_LIMIT_START", 12),
   /** The NextAuth endpoints (sign in / callback / session). */
   auth: ruleFromEnv("RATE_LIMIT_AUTH", 20),
-  /** Boss arena — polled ~every 2s and click-batches flushed ~every 1s. */
-  boss: ruleFromEnv("RATE_LIMIT_BOSS", 150),
+  /** Boss arena — very chatty; the real abuse cap is the server CPS clamp,
+   *  so this is an in-memory backstop only (no DB write per request). */
+  boss: ruleFromEnv("RATE_LIMIT_BOSS", 90, { memoryOnly: true }),
 } as const;
 
 const denyUntil = new Map<string, number>();
+
+// memoryOnly rules: a plain per-instance sliding window, no persistence.
+const memHits = new Map<string, number[]>();
+function consumeMemory(key: string, rule: RateRule): RateResult {
+  const now = Date.now();
+  const cutoff = now - rule.windowMs;
+  const arr = (memHits.get(key) ?? []).filter((t) => t > cutoff);
+  arr.push(now);
+  memHits.set(key, arr);
+  if (memHits.size > 5000) {
+    for (const [k, v] of memHits) if (!v.length || v[v.length - 1] < cutoff) memHits.delete(k);
+  }
+  if (arr.length > rule.limit) {
+    return { ok: false, retryAfterSec: Math.ceil((arr[0] + rule.windowMs - now) / 1000) };
+  }
+  return { ok: true, retryAfterSec: 0 };
+}
 
 async function clientIp(): Promise<string> {
   const h = await headers();
@@ -60,6 +90,8 @@ export type RateResult = { ok: boolean; retryAfterSec: number };
 
 /** Increment the counter for `key` and report whether it is still within `rule`. */
 export async function consume(key: string, rule: RateRule): Promise<RateResult> {
+  if (rule.memoryOnly) return consumeMemory(key, rule);
+
   const now = Date.now();
 
   const blockedUntil = denyUntil.get(key);

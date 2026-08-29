@@ -33,11 +33,7 @@ export type BossState = {
 export type HitResponse = {
   ok: boolean;
   error?: string;
-  hp?: number;
-  maxHp?: number;
-  dealt?: number;
-  slain?: boolean;
-  yourDamage?: number;
   applied?: number;
-  state?: BossState;
+  /** Full boss state — the hit response doubles as the poll while fighting. */
+  state: BossState;
 };

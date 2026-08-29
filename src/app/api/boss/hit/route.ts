@@ -21,8 +21,5 @@ export async function POST(request: Request) {
   }
 
   const result = await applyHit(discordId, (body as { clicks?: unknown })?.clicks);
-  if (!result.ok) {
-    return Response.json(result, { status: result.error === "no_active_boss" ? 409 : 200 });
-  }
-  return Response.json(result);
+  return Response.json(result, { status: result.ok ? 200 : 409 });
 }
