@@ -308,7 +308,7 @@ function RewardLine({ reward }: { reward: RewardResult }) {
   if (reward.status === "rewarded") {
     return (
       <p className={styles.reward}>
-        +{reward.amount} cash! New balance: {reward.newBalance}
+        +{reward.amount} banked! New balance: {reward.newBalance}
       </p>
     );
   }

@@ -362,6 +362,9 @@ export async function resolveBoss(): Promise<ResolveResult> {
     const h = pending[i];
     let amount: number;
     let reason: string;
+    // Bounty banks like the daily rewards; the penalty comes off spendable
+    // cash so nobody is pushed into "bank debt".
+    let target: "bank" | "cash" = "bank";
     if (boss.slain) {
       // proportional share; the remainder goes to the top damager
       const base = Math.floor((BOSS_SLAY_REWARD * h.damage) / totalDamage);
@@ -378,10 +381,11 @@ export async function resolveBoss(): Promise<ResolveResult> {
     } else {
       amount = -BOSS_FAIL_PENALTY;
       reason = `${BOSS_NAME} escaped — raid penalty`;
+      target = "cash";
     }
 
     try {
-      if (amount !== 0) await addCurrency(h.discordId, amount, reason);
+      if (amount !== 0) await addCurrency(h.discordId, amount, reason, target);
       await prisma.bossHit.update({
         where: { id: h.id },
         data: { settled: true, payout: amount },

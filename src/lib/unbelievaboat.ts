@@ -22,7 +22,9 @@ export type Balance = {
 };
 
 /**
- * Add (or, with a negative amount, remove) cash from a user's balance.
+ * Add (or, with a negative amount, remove) currency from a user's balance.
+ * Rewards land in the **bank** by default (safe from robberies / gambling
+ * losses); pass `target: "cash"` to touch the spendable balance instead.
  * Throws on any non-2xx response so callers can treat a resolved promise
  * as "the payout definitely landed".
  */
@@ -30,6 +32,7 @@ export async function addCurrency(
   discordUserId: string,
   amount: number,
   reason: string,
+  target: "bank" | "cash" = "bank",
 ): Promise<Balance> {
   const token = requireEnv("UNBELIEVABOAT_API_TOKEN");
   const guildId = requireEnv("UNBELIEVABOAT_GUILD_ID");
@@ -43,7 +46,7 @@ export async function addCurrency(
         "Content-Type": "application/json",
         Accept: "application/json",
       },
-      body: JSON.stringify({ cash: amount, reason }),
+      body: JSON.stringify({ [target]: amount, reason }),
       // Never cache a mutation.
       cache: "no-store",
     },

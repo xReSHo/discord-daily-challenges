@@ -12,7 +12,7 @@ export type SectionConfig = {
   label: string;
   /** Where the "Play" button on the dashboard links to. */
   href: string;
-  /** Cash paid out by UnbelievaBoat on first completion of the day. */
+  /** Coins banked via UnbelievaBoat on first completion of the day. */
   reward: number;
 };
 

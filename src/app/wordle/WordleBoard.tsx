@@ -266,7 +266,7 @@ function RewardLine({
   if (reward?.status === "rewarded") {
     return (
       <span className={styles.reward}>
-        +{reward.amount} cash! New balance: {reward.newBalance}
+        +{reward.amount} banked! New balance: {reward.newBalance}
       </span>
     );
   }
