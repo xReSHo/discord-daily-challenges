@@ -5,7 +5,9 @@ import styles from "./typing.module.css";
 
 type Phase = "idle" | "ready" | "typing" | "submitting" | "done";
 
-const MAX_STRIKES = 3; // wrong keystrokes before the run auto-fails
+const MAX_STRIKES = 3; // strikes before the run auto-fails
+const MISTAKE_GRACE_MS = 500; // after a mistake, further wrong keys within this
+// window don't add another strike (a slip of two keys, or letter+space, = one)
 const MIN_WPM = 30; // live speed floor once warmed up
 const WPM_GRACE_SEC = 3; // don't judge speed before this
 const WPM_GRACE_CHARS = 15; // ...or before this many characters typed
@@ -41,6 +43,7 @@ export function TypingTest({ completedToday }: { completedToday: boolean }) {
   const startRef = useRef<number | null>(null);
   const keystrokesRef = useRef(0);
   const strikesRef = useRef(0);
+  const lastStrikeAtRef = useRef(0); // performance.now() of the last counted strike
   const submittedRef = useRef(false);
   const typedRef = useRef("");
   const textRef = useRef("");
@@ -104,6 +107,7 @@ export function TypingTest({ completedToday }: { completedToday: boolean }) {
             typed: finalTyped,
             durationMs,
             keystrokes: keystrokesRef.current,
+            strikes: strikesRef.current,
           }),
         });
         setResult((await res.json()) as SubmitResponse);
@@ -129,6 +133,7 @@ export function TypingTest({ completedToday }: { completedToday: boolean }) {
       submittedRef.current = false;
       keystrokesRef.current = 0;
       strikesRef.current = 0;
+      lastStrikeAtRef.current = 0;
       startRef.current = null;
       typedRef.current = "";
       textRef.current = data.text;
@@ -159,16 +164,25 @@ export function TypingTest({ completedToday }: { completedToday: boolean }) {
     if (phase !== "ready" && phase !== "typing") return;
     const next = e.target.value.slice(0, text.length);
 
-    // count any newly-added characters that are wrong as strikes
-    let newStrikes = 0;
+    // Any newly-added wrong characters count as ONE strike, and only if we're
+    // past the grace window since the last one — so a two-key slip, or a wrong
+    // letter followed by space, is a single strike, not two.
+    let hasNewMistake = false;
     for (let i = typed.length; i < next.length; i++) {
-      if (next[i] !== text[i]) newStrikes++;
+      if (next[i] !== text[i]) {
+        hasNewMistake = true;
+        break;
+      }
     }
-    if (newStrikes > 0) {
-      strikesRef.current += newStrikes;
-      setStrikes(strikesRef.current);
-      if (strikesRef.current >= MAX_STRIKES) {
-        failLocal(`${MAX_STRIKES} strikes — too many mistakes.`);
+    if (hasNewMistake) {
+      const now = performance.now();
+      if (now - lastStrikeAtRef.current >= MISTAKE_GRACE_MS) {
+        lastStrikeAtRef.current = now;
+        strikesRef.current += 1;
+        setStrikes(strikesRef.current);
+        if (strikesRef.current >= MAX_STRIKES) {
+          failLocal(`${MAX_STRIKES} strikes — too many mistakes.`);
+        }
       }
     }
 
@@ -211,8 +225,9 @@ export function TypingTest({ completedToday }: { completedToday: boolean }) {
       <div className={styles.card}>
         <p className={styles.lead}>
           Type the paragraph exactly. The timer starts on your first keystroke.
-          Pasting is blocked, {MAX_STRIKES} wrong characters fails the run, and so
-          does dropping under {MIN_WPM} WPM.
+          Pasting is blocked, {MAX_STRIKES} mistakes fails the run, and so does
+          dropping under {MIN_WPM} WPM. A quick slip of a couple of keys counts
+          as one mistake.
         </p>
         {error && <p className={styles.error}>{error}</p>}
         <button className={styles.button} onClick={startTest}>

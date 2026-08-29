@@ -1,0 +1,15 @@
+# Netlify build config for the daily-challenges Next.js app.
+# The Next.js runtime plugin is auto-installed by Netlify on detection; it is
+# pinned here so builds are reproducible.
+
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "20"
+  # Prisma: skip the "new version" postinstall notice noise in CI.
+  PRISMA_HIDE_UPDATE_MESSAGE = "true"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"

@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import styles from "./aim.module.css";
 
+const MAX_MISSES = 3; // clicks off every target before the run fails
+
 type Phase = "idle" | "countdown" | "playing" | "submitting" | "done";
 
 type StartResponse = {
@@ -32,6 +34,7 @@ export function AimTrainer({ completedToday }: { completedToday: boolean }) {
   const [phase, setPhase] = useState<Phase>(completedToday ? "done" : "idle");
   const [round, setRound] = useState<StartResponse | null>(null);
   const [hitCount, setHitCount] = useState(0);
+  const [missCount, setMissCount] = useState(0);
   const [countdown, setCountdown] = useState(3);
   const [remainingMs, setRemainingMs] = useState(0);
   const [result, setResult] = useState<SubmitResponse | LocalFail | null>(null);
@@ -40,6 +43,7 @@ export function AimTrainer({ completedToday }: { completedToday: boolean }) {
   const areaRef = useRef<HTMLDivElement>(null);
   const roundStartRef = useRef<number | null>(null);
   const hitsRef = useRef<Hit[]>([]);
+  const missesRef = useRef(0);
   const submittedRef = useRef(false);
 
   const submit = useCallback(async () => {
@@ -111,8 +115,10 @@ export function AimTrainer({ completedToday }: { completedToday: boolean }) {
       }
       submittedRef.current = false;
       hitsRef.current = [];
+      missesRef.current = 0;
       roundStartRef.current = null;
       setHitCount(0);
+      setMissCount(0);
       setCountdown(3);
       setRound(data);
       setRemainingMs(data.timeLimitMs);
@@ -127,6 +133,7 @@ export function AimTrainer({ completedToday }: { completedToday: boolean }) {
     if (roundStartRef.current === null) return;
     e.stopPropagation();
 
+    if (error) setError("");
     const rect = areaRef.current.getBoundingClientRect();
     const x = (e.clientX - rect.left) / rect.width;
     const y = (e.clientY - rect.top) / rect.height;
@@ -142,6 +149,23 @@ export function AimTrainer({ completedToday }: { completedToday: boolean }) {
     setHitCount(next);
 
     if (next >= round.count) void submit();
+  }
+
+  function onAreaMiss() {
+    if (phase !== "playing" || !round || submittedRef.current) return;
+    missesRef.current += 1;
+    setMissCount(missesRef.current);
+    if (missesRef.current >= MAX_MISSES) {
+      submittedRef.current = true;
+      setResult({
+        ok: false,
+        local: true,
+        reason: `${MAX_MISSES} misses — the run is lost. You cleared ${hitsRef.current.length}/${round.count} targets.`,
+      });
+      setPhase("done");
+    } else {
+      setError("miss!");
+    }
   }
 
   const restart = () => {
@@ -168,8 +192,9 @@ export function AimTrainer({ completedToday }: { completedToday: boolean }) {
       <div className={styles.card}>
         <p className={styles.lead}>
           Click every target before the timer runs out. There are{" "}
-          {round?.count ?? 20}, and a short countdown before it begins. Clean
-          clicks are rewarded; robotic patterns are rejected.
+          {round?.count ?? 20}, and a short countdown before it begins.{" "}
+          {MAX_MISSES} clicks off-target fails the run. Clean clicks are
+          rewarded; robotic patterns are rejected.
         </p>
         {error && <p className={styles.error}>{error}</p>}
         <button className={styles.button} onClick={start}>
@@ -192,12 +217,15 @@ export function AimTrainer({ completedToday }: { completedToday: boolean }) {
         <span className={low ? styles.timerLow : undefined}>
           {phase === "countdown" ? "get ready" : `${secondsLeft.toFixed(1)}s`}
         </span>
+        <span className={missCount > 0 ? styles.missActive : undefined}>
+          ✗ {missCount}/{MAX_MISSES}
+        </span>
       </div>
 
       <div
         ref={areaRef}
         className={styles.area}
-        onClick={() => phase === "playing" && setError("miss!")}
+        onClick={onAreaMiss}
       >
         {phase === "countdown" && (
           <div className={styles.countdown}>{countdown}</div>
@@ -223,7 +251,9 @@ export function AimTrainer({ completedToday }: { completedToday: boolean }) {
       </div>
 
       {phase === "playing" && error === "miss!" && (
-        <p className={styles.hint}>Missed — only clicks on the target count.</p>
+        <p className={styles.hint}>
+          Missed — {MAX_MISSES - missCount} left before the run fails.
+        </p>
       )}
     </div>
   );

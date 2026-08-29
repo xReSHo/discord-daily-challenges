@@ -26,6 +26,7 @@ export async function POST(request: Request) {
     typed: b.typed,
     durationMs: b.durationMs,
     keystrokes: b.keystrokes,
+    strikes: b.strikes,
   });
 
   return Response.json(result, { status: result.ok ? 200 : 422 });

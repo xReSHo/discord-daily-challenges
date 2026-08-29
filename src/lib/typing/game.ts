@@ -54,6 +54,8 @@ export type SubmitInput = {
   typed: unknown;
   durationMs: unknown;
   keystrokes: unknown;
+  /** Client's strike count — one per burst of mistakes (grace-windowed). */
+  strikes: unknown;
 };
 
 export type SubmitResult =
@@ -68,6 +70,7 @@ export async function submitTest(
   const typed = typeof input.typed === "string" ? input.typed : "";
   const durationMs = Number(input.durationMs);
   const keystrokes = Number(input.keystrokes);
+  const reportedStrikes = Number(input.strikes);
 
   const payload = verifyToken<TokenPayload>(token);
   if (!payload || payload.s !== SECTION || payload.d !== discordId) {
@@ -95,12 +98,34 @@ export async function submitTest(
   const accuracy = correct / target.length;
   const wrong = target.length - correct;
 
-  // Strike rule: too many wrong characters in the final text. Mirrors the
-  // client's live counter, and backstops a client that skipped it.
-  if (wrong >= MAX_STRIKES) {
+  // Strike rule. The client counts one strike per burst of mistakes (a short
+  // grace window after each), so a two-key slip or letter+space is one strike,
+  // not two. Trust that count for the strike-out when it's sane...
+  const strikes =
+    Number.isFinite(reportedStrikes) && reportedStrikes >= 0
+      ? Math.floor(reportedStrikes)
+      : wrong;
+  if (strikes >= MAX_STRIKES) {
     return {
       ok: false,
-      reason: `Too many mistakes (${wrong}) — ${MAX_STRIKES} strikes fails the run.`,
+      reason: `${MAX_STRIKES} strikes — too many mistakes.`,
+      accuracy,
+    };
+  }
+  // ...but still hard-fail a run whose final text is mostly wrong. No grace
+  // window excuses that many errors, and it's what a tampered count would hide.
+  const wrongCeiling = Math.max(10, Math.ceil(target.length * 0.1));
+  if (wrong > wrongCeiling) {
+    if (strikes < MAX_STRIKES) {
+      flagAttempt(discordId, SECTION, "error count far exceeds reported strikes", {
+        wrong,
+        reportedStrikes: strikes,
+        wrongCeiling,
+      });
+    }
+    return {
+      ok: false,
+      reason: `Too many mistakes (${wrong}).`,
       accuracy,
     };
   }

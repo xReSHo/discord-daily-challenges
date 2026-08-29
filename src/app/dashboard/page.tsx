@@ -6,7 +6,6 @@ import {
   Coins,
   Crosshair,
   Flame,
-  FlaskConical,
   Grid3x3,
   Keyboard,
   ShieldCheck,
@@ -16,7 +15,6 @@ import { getCompletedSectionsToday } from "@/lib/completions";
 import { getChallengeDateString } from "@/lib/challenge-date";
 import { SECTION_IDS, SECTIONS, type SectionId } from "@/lib/sections";
 import { AppFrame } from "@/components/AppFrame";
-import { DummySection } from "./DummySection";
 import styles from "./dashboard.module.css";
 
 const META: Record<
@@ -34,10 +32,6 @@ const META: Record<
   aim: {
     icon: Crosshair,
     blurb: "Strike all twenty marks before the timer burns down to nothing.",
-  },
-  dummy: {
-    icon: FlaskConical,
-    blurb: "A proving ground for the reward pipeline.",
   },
 };
 
@@ -74,19 +68,6 @@ export default async function Dashboard() {
             const section = SECTIONS[id];
             const meta = META[id];
             const done = completed.has(id);
-
-            if (!section.href) {
-              return (
-                <DummySection
-                  key={id}
-                  sectionId={id}
-                  label={section.label}
-                  reward={section.reward}
-                  completed={done}
-                  blurb={meta.blurb}
-                />
-              );
-            }
 
             return (
               <Link
