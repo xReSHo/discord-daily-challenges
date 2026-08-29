@@ -3,9 +3,10 @@ import { ShieldAlert, Coins, CircleCheck, TriangleAlert } from "lucide-react";
 import { auth } from "@/auth";
 import { isAdmin } from "@/lib/admin";
 import { AppFrame } from "@/components/AppFrame";
-import { getAdminOverview } from "@/lib/admin-data";
+import { getAdminOverview, type AdminOverview } from "@/lib/admin-data";
 import { getChallengeDateString } from "@/lib/challenge-date";
 import { SECTIONS, isSectionId } from "@/lib/sections";
+import { logger } from "@/lib/logger";
 import styles from "./admin.module.css";
 
 // Always current — never prerender or cache an operator view.
@@ -27,9 +28,25 @@ function shortId(discordId: string): string {
 
 export default async function AdminPage() {
   const session = await auth();
-  if (!isAdmin(session?.user?.discordId)) notFound();
+  const discordId = session?.user?.discordId;
 
-  const data = await getAdminOverview();
+  if (!isAdmin(discordId)) {
+    // 404, not 403 — a non-admin gets no signal the page exists at all.
+    logger.warn("admin.access_denied", {
+      discordId: discordId ?? null,
+      authed: Boolean(session?.user),
+    });
+    notFound();
+  }
+
+  let data: AdminOverview | null = null;
+  let loadError: string | null = null;
+  try {
+    data = await getAdminOverview();
+  } catch (err) {
+    loadError = err instanceof Error ? err.message : String(err);
+    logger.error("admin.overview_failed", { message: loadError });
+  }
 
   return (
     <AppFrame back={{ href: "/dashboard", label: "Back to trials" }}>
@@ -44,6 +61,15 @@ export default async function AdminPage() {
           </p>
         </header>
 
+        {!data && (
+          <p className={styles.empty}>
+            Couldn&apos;t load the ledger
+            {loadError ? ` — ${loadError}` : ""}. If this is the first deploy,
+            run <code>npx prisma db push</code> to create the audit tables.
+          </p>
+        )}
+        {data && (
+        <>
         <section className={`${styles.tiles} stagger`}>
           <Tile
             icon={<CircleCheck size={18} />}
@@ -174,6 +200,8 @@ export default async function AdminPage() {
             </div>
           )}
         </section>
+        </>
+        )}
       </div>
     </AppFrame>
   );

@@ -1,19 +1,27 @@
 /**
- * Who may see `/admin`. Set `ADMIN_DISCORD_IDS` to a comma-separated list of
- * Discord user ids (the same snowflakes the bot uses in `OWNER_IDS`).
+ * Who may see `/admin`.
+ *
+ * Set `ADMIN_DISCORD_IDS` to a comma-separated list of Discord user ids (the
+ * same snowflakes the bot uses in `OWNER_IDS`). Read at call time, not module
+ * load, so it can't be captured before the env is ready.
  */
 
-const ADMIN_IDS = new Set(
-  (process.env.ADMIN_DISCORD_IDS ?? process.env.OWNER_IDS ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean),
-);
+function adminIds(): Set<string> {
+  const raw = process.env.ADMIN_DISCORD_IDS ?? process.env.OWNER_IDS ?? "";
+  return new Set(
+    raw
+      .split(",")
+      // tolerate quotes and a trailing "# comment" on the value
+      .map((s) => (s.trim().replace(/^["']/, "").match(/\d{5,}/) ?? [""])[0])
+      .filter(Boolean),
+  );
+}
 
 export function isAdmin(discordId: string | null | undefined): boolean {
-  return typeof discordId === "string" && ADMIN_IDS.has(discordId);
+  if (typeof discordId !== "string") return false;
+  return adminIds().has(discordId.trim());
 }
 
 export function adminCount(): number {
-  return ADMIN_IDS.size;
+  return adminIds().size;
 }
