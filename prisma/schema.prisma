@@ -179,3 +179,21 @@ model BossHit {
   @@unique([bossId, discordId])
   @@index([bossId])
 }
+
+// --- Support widget: bug reports & suggestions ---
+
+/// One row per submission from the in-app feedback widget. `delivered` flips
+/// once it has reached the owner (via the Discord webhook, or the bot DM
+/// fallback). Surfaced on /admin.
+model Feedback {
+  id        String   @id @default(cuid())
+  discordId String
+  kind      String   // "bug" | "idea"
+  message   String
+  path      String   @default("/")
+  delivered Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([delivered])
+}

@@ -21,6 +21,8 @@ export async function getAdminOverview() {
     recentFlags,
     flags7d,
     unpaidCompletions,
+    recentFeedback,
+    feedbackUndelivered,
   ] = await Promise.all([
     prisma.completion.groupBy({
       by: ["section"],
@@ -43,6 +45,8 @@ export async function getAdminOverview() {
     }),
     prisma.suspiciousAttempt.count({ where: { createdAt: { gte: weekAgo } } }),
     prisma.completion.count({ where: { rewarded: false } }),
+    prisma.feedback.findMany({ orderBy: { createdAt: "desc" }, take: RECENT_LIMIT }),
+    prisma.feedback.count({ where: { delivered: false } }),
   ]);
 
   return {
@@ -59,5 +63,7 @@ export async function getAdminOverview() {
     recentFlags,
     flags7d,
     unpaidCompletions,
+    recentFeedback,
+    feedbackUndelivered,
   };
 }

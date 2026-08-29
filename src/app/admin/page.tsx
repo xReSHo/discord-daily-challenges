@@ -1,5 +1,11 @@
 import { notFound } from "next/navigation";
-import { ShieldAlert, Coins, CircleCheck, TriangleAlert } from "lucide-react";
+import {
+  ShieldAlert,
+  Coins,
+  CircleCheck,
+  TriangleAlert,
+  MessageSquare,
+} from "lucide-react";
 import { auth } from "@/auth";
 import { isAdmin } from "@/lib/admin";
 import { AppFrame } from "@/components/AppFrame";
@@ -93,6 +99,12 @@ export default async function AdminPage() {
             value={data.unpaidCompletions}
             tone={data.unpaidCompletions > 0 ? "bad" : undefined}
           />
+          <Tile
+            icon={<MessageSquare size={18} />}
+            label="Feedback (undelivered)"
+            value={data.feedbackUndelivered}
+            tone={data.feedbackUndelivered > 0 ? "warn" : undefined}
+          />
         </section>
 
         <section className={styles.block}>
@@ -153,6 +165,49 @@ export default async function AdminPage() {
                       <td className={styles.warn}>{f.reason}</td>
                       <td className={`mono ${styles.detail}`}>
                         {JSON.stringify(f.detail)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        <section className={styles.block}>
+          <h2 className={styles.blockTitle}>
+            Feedback{" "}
+            <span className={styles.count}>({data.recentFeedback.length})</span>
+          </h2>
+          {data.recentFeedback.length === 0 ? (
+            <p className={styles.empty}>No reports or suggestions yet.</p>
+          ) : (
+            <div className={styles.tableWrap}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>When</th>
+                    <th>User</th>
+                    <th>Kind</th>
+                    <th>Page</th>
+                    <th>Message</th>
+                    <th>Sent</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.recentFeedback.map((f) => (
+                    <tr key={f.id}>
+                      <td className="mono">{when(f.createdAt)}</td>
+                      <td className="mono" title={f.discordId}>
+                        {shortId(f.discordId)}
+                      </td>
+                      <td>{f.kind === "bug" ? "🐛 bug" : "💡 idea"}</td>
+                      <td className="mono">{f.path}</td>
+                      <td className={styles.detail} style={{ whiteSpace: "normal" }}>
+                        {f.message}
+                      </td>
+                      <td className={f.delivered ? styles.ok : styles.warn}>
+                        {f.delivered ? "yes" : "queued"}
                       </td>
                     </tr>
                   ))}

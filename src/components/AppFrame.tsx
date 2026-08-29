@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { isAdmin } from "@/lib/admin";
 import { doSignOut } from "@/app/actions";
 import { Sigil } from "./Sigil";
+import { FeedbackWidget } from "./FeedbackWidget";
 import styles from "./AppFrame.module.css";
 
 /** Shared shell for the authed pages: header, centered content, footer. */
@@ -70,6 +71,8 @@ export async function AppFrame({
           <span className="mono">{new Date().getUTCFullYear()}</span>
         </div>
       </footer>
+
+      {user?.discordId && <FeedbackWidget />}
     </>
   );
 }
