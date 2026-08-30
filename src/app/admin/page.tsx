@@ -9,7 +9,11 @@ import {
 import { auth } from "@/auth";
 import { isAdmin } from "@/lib/admin";
 import { AppFrame } from "@/components/AppFrame";
-import { getAdminOverview, type AdminOverview } from "@/lib/admin-data";
+import {
+  getAdminOverview,
+  type AdminOverview,
+  type AdminFilters,
+} from "@/lib/admin-data";
 import { getChallengeDateString } from "@/lib/challenge-date";
 import { SECTIONS, isSectionId } from "@/lib/sections";
 import { logger } from "@/lib/logger";
@@ -18,12 +22,30 @@ import styles from "./admin.module.css";
 // Always current — never prerender or cache an operator view.
 export const dynamic = "force-dynamic";
 
+const CHALLENGE_TZ = process.env.CHALLENGE_TZ || "Asia/Bahrain";
+
 function sectionLabel(id: string): string {
+  if (id === "boss") return "Boss Raid";
   return isSectionId(id) ? SECTIONS[id].label : id;
 }
 
+/** Plain UTC timestamp — used where exact wall-clock precision matters most. */
 function when(d: Date): string {
   return new Date(d).toISOString().replace("T", " ").slice(0, 19) + "Z";
+}
+
+/** 12-hour clock in the challenge timezone, for the Recent completions log. */
+function whenAmPm(d: Date): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: CHALLENGE_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  }).format(new Date(d));
 }
 
 function shortId(discordId: string): string {
@@ -32,7 +54,17 @@ function shortId(discordId: string): string {
     : discordId;
 }
 
-export default async function AdminPage() {
+type SearchParams = { [key: string]: string | string[] | undefined };
+
+function firstParam(v: string | string[] | undefined): string | undefined {
+  return Array.isArray(v) ? v[0] : v;
+}
+
+export default async function AdminPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
   const session = await auth();
   const discordId = session?.user?.discordId;
 
@@ -45,10 +77,18 @@ export default async function AdminPage() {
     notFound();
   }
 
+  const params = await searchParams;
+  const filters: AdminFilters = {
+    q: firstParam(params.q),
+    from: firstParam(params.from),
+    to: firstParam(params.to),
+  };
+  const hasFilters = Boolean(filters.q || filters.from || filters.to);
+
   let data: AdminOverview | null = null;
   let loadError: string | null = null;
   try {
-    data = await getAdminOverview();
+    data = await getAdminOverview(filters);
   } catch (err) {
     loadError = err instanceof Error ? err.message : String(err);
     logger.error("admin.overview_failed", { message: loadError });
@@ -222,8 +262,46 @@ export default async function AdminPage() {
             Recent completions{" "}
             <span className={styles.count}>({data.recentCompletions.length})</span>
           </h2>
+
+          <form className={styles.filterBar} action="/admin" method="get">
+            <input
+              type="text"
+              name="q"
+              placeholder="Search user ID or name"
+              defaultValue={filters.q ?? ""}
+              className={styles.filterInput}
+            />
+            <input
+              type="date"
+              name="from"
+              defaultValue={filters.from ?? ""}
+              aria-label="From date"
+              className={styles.filterInput}
+            />
+            <span className={styles.filterToLabel}>to</span>
+            <input
+              type="date"
+              name="to"
+              defaultValue={filters.to ?? ""}
+              aria-label="To date"
+              className={styles.filterInput}
+            />
+            <button type="submit" className={styles.filterButton}>
+              Filter
+            </button>
+            {hasFilters && (
+              <a href="/admin" className={styles.filterClear}>
+                Clear
+              </a>
+            )}
+          </form>
+
           {data.recentCompletions.length === 0 ? (
-            <p className={styles.empty}>No completions recorded yet.</p>
+            <p className={styles.empty}>
+              {hasFilters
+                ? "No completions match those filters."
+                : "No completions recorded yet."}
+            </p>
           ) : (
             <div className={styles.tableWrap}>
               <table className={styles.table}>
@@ -239,12 +317,26 @@ export default async function AdminPage() {
                 <tbody>
                   {data.recentCompletions.map((c) => (
                     <tr key={c.id}>
-                      <td className="mono">{when(c.createdAt)}</td>
-                      <td className="mono" title={c.discordId}>
-                        {shortId(c.discordId)}
+                      <td className="mono">{whenAmPm(c.createdAt)}</td>
+                      <td>
+                        <div className={styles.userCell}>
+                          <span>{c.name ?? "Unknown"}</span>
+                          <span
+                            className={`mono ${styles.userId}`}
+                            title={c.discordId}
+                          >
+                            {shortId(c.discordId)}
+                          </span>
+                        </div>
                       </td>
                       <td>{sectionLabel(c.section)}</td>
-                      <td className={styles.num}>{c.rewardAmount}</td>
+                      <td
+                        className={`mono ${styles.num} ${
+                          c.rewardAmount < 0 ? styles.bad : ""
+                        }`}
+                      >
+                        {c.rewardAmount.toLocaleString()}
+                      </td>
                       <td className={c.rewarded ? styles.ok : styles.bad}>
                         {c.rewarded ? "yes" : "FAILED"}
                       </td>

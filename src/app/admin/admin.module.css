@@ -152,3 +152,65 @@
 .warn {
   color: var(--warn);
 }
+
+/* ---------- user cell (name + id) ---------- */
+.userCell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.userId {
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+/* ---------- recent-completions filter bar ---------- */
+.filterBar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.filterInput {
+  padding: 7px 10px;
+  font-size: 12.5px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--panel-2);
+  color: var(--ink);
+}
+
+.filterInput:first-child {
+  flex: 1 1 200px;
+  min-width: 160px;
+}
+
+.filterToLabel {
+  font-size: 11px;
+  color: var(--ink-mute);
+}
+
+.filterButton {
+  padding: 7px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--panel-2);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.filterButton:hover {
+  border-color: var(--gold-deep);
+}
+
+.filterClear {
+  font-size: 11.5px;
+  color: var(--ink-mute);
+  text-decoration: underline;
+}

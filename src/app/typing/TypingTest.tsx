@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import styles from "./typing.module.css";
 
 type Phase = "idle" | "ready" | "typing" | "submitting" | "done";
@@ -33,6 +34,7 @@ type RewardResult =
   | { status: "reward_failed"; message: string };
 
 export function TypingTest({ completedToday }: { completedToday: boolean }) {
+  const router = useRouter();
   const [phase, setPhase] = useState<Phase>(completedToday ? "done" : "idle");
   const [text, setText] = useState("");
   const [token, setToken] = useState("");
@@ -222,15 +224,21 @@ export function TypingTest({ completedToday }: { completedToday: boolean }) {
     setError("");
   };
 
+  const goToDashboard = () => router.push("/dashboard");
+
   // ---- render ----
 
   if (phase === "done") {
+    const won = result !== null && result.ok;
     return (
       <div className={styles.card}>
         <ResultView result={result} error={error} completedToday={completedToday} />
         {!(result === null && completedToday) && (
-          <button className={styles.button} onClick={restart}>
-            {result && result.ok ? "Done" : "Try again"}
+          <button
+            className={styles.button}
+            onClick={won ? goToDashboard : restart}
+          >
+            {won ? "Done" : "Try again"}
           </button>
         )}
       </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import styles from "./aim.module.css";
 
 const MAX_MISSES = 3; // clicks off every target before the run fails
@@ -31,6 +32,7 @@ type LocalFail = { ok: false; reason: string; local: true };
 type Hit = { i: number; x: number; y: number; t: number };
 
 export function AimTrainer({ completedToday }: { completedToday: boolean }) {
+  const router = useRouter();
   const [phase, setPhase] = useState<Phase>(completedToday ? "done" : "idle");
   const [round, setRound] = useState<StartResponse | null>(null);
   const [hitCount, setHitCount] = useState(0);
@@ -174,13 +176,19 @@ export function AimTrainer({ completedToday }: { completedToday: boolean }) {
     setError("");
   };
 
+  const goToDashboard = () => router.push("/dashboard");
+
   if (phase === "done") {
+    const won = result !== null && result.ok;
     return (
       <div className={styles.card}>
         <ResultView result={result} error={error} completedToday={completedToday} />
         {!(result === null && completedToday) && (
-          <button className={styles.button} onClick={restart}>
-            {result && result.ok ? "Done" : "Try again"}
+          <button
+            className={styles.button}
+            onClick={won ? goToDashboard : restart}
+          >
+            {won ? "Done" : "Try again"}
           </button>
         )}
       </div>

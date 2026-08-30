@@ -93,6 +93,7 @@ model Completion {
 
   @@unique([discordId, section, date])
   @@index([discordId, date])
+  @@index([createdAt])
 }
 
 // --- Phase 3: Wordle ---
@@ -160,6 +161,8 @@ model Boss {
   resolvedAt  DateTime?
   createdAt   DateTime  @default(now())
   hits        BossHit[]
+
+  @@index([resolvedAt])
 }
 
 /// One row per (boss, fighter). `damage` drives the bounty split; `settled`
