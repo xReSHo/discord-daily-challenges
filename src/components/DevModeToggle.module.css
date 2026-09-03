@@ -1,0 +1,48 @@
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    color 0.2s,
+    border-color 0.2s,
+    background 0.2s;
+}
+
+.toggle:hover:not(:disabled) {
+  color: var(--ink-dim);
+  border-color: var(--line-gold);
+}
+
+.toggle:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.on {
+  color: #1a1409;
+  background: linear-gradient(180deg, var(--gold-bright), var(--gold));
+  border-color: var(--gold);
+}
+
+.on:hover:not(:disabled) {
+  color: #1a1409;
+}
+
+@media (max-width: 560px) {
+  .label {
+    display: none;
+  }
+  .toggle {
+    padding: 6px;
+  }
+}

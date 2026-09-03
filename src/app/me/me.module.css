@@ -1,0 +1,187 @@
+.head {
+  padding-block: 4px 28px;
+}
+
+.title {
+  margin-top: 10px;
+  font-size: clamp(1.8rem, 4.5vw, 2.6rem);
+  letter-spacing: -0.01em;
+}
+
+.ranksLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 14px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  transition: color 0.2s;
+}
+
+.ranksLink:hover {
+  color: var(--gold-bright);
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+@media (min-width: 620px) {
+  .tiles {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 20px 14px;
+  text-align: center;
+}
+
+.tileNum {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--f-serif);
+  font-size: 1.9rem;
+  color: var(--gold-bright);
+  font-variant-numeric: tabular-nums;
+}
+
+.flame {
+  color: var(--bad-bright);
+}
+
+.tileLabel {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+.section {
+  margin-bottom: 16px;
+}
+
+.h2 {
+  font-size: 1.1rem;
+  margin-bottom: 16px;
+}
+
+/* ---------- heatmap ---------- */
+.heat {
+  display: grid;
+  grid-template-rows: repeat(7, 1fr);
+  grid-auto-flow: column;
+  gap: 3px;
+  overflow-x: auto;
+}
+
+.cell {
+  width: 13px;
+  height: 13px;
+  border-radius: 2px;
+  border: 1px solid var(--line);
+}
+
+.lvl0 {
+  background: var(--bg-2);
+}
+.lvl1 {
+  background: color-mix(in srgb, var(--gold) 28%, transparent);
+  border-color: color-mix(in srgb, var(--gold) 36%, transparent);
+}
+.lvl2 {
+  background: color-mix(in srgb, var(--gold) 52%, transparent);
+  border-color: color-mix(in srgb, var(--gold) 60%, transparent);
+}
+.lvl3 {
+  background: color-mix(in srgb, var(--gold) 76%, transparent);
+  border-color: var(--gold);
+}
+.lvl4 {
+  background: var(--gold-bright);
+  border-color: var(--gold-bright);
+}
+
+/* ---------- by game ---------- */
+.gameRows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.gameRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
+.gameRow:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.gameName {
+  font-family: var(--f-serif);
+  font-size: 1.05rem;
+  color: var(--ink);
+}
+
+.gameMeta {
+  font-family: var(--f-mono);
+  font-size: 12px;
+  color: var(--ink-mute);
+}
+
+.gameMeta strong {
+  color: var(--gold-bright);
+  font-weight: 600;
+}
+
+/* ---------- wordle distribution ---------- */
+.dist {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.distRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--f-mono);
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+
+.distN {
+  width: 1ch;
+  color: var(--ink-mute);
+}
+
+.distBar {
+  height: 14px;
+  min-width: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--gold-deep), var(--gold-bright));
+  transition: width 0.4s var(--ease);
+}
+
+.distC {
+  color: var(--ink-mute);
+}

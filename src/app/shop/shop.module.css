@@ -1,0 +1,310 @@
+.head {
+  padding-block: 4px 24px;
+}
+
+.title {
+  margin-top: 10px;
+  font-size: clamp(1.8rem, 4.5vw, 2.6rem);
+  letter-spacing: -0.01em;
+}
+
+.sub {
+  margin-top: 14px;
+  max-width: 52ch;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-mute);
+}
+
+/* ---------- purse strip ---------- */
+.purse {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  padding: 14px 18px;
+  margin-bottom: 34px;
+  background: linear-gradient(180deg, var(--panel), var(--panel-2)), var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+.purseItem {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--ink-mute);
+}
+
+.purseItem svg {
+  align-self: center;
+  color: var(--ink-faint);
+}
+
+.purseNum {
+  font-family: var(--f-mono);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.purseLabel {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.purseTotal svg {
+  color: var(--gold);
+}
+
+.purseTotal .purseNum {
+  color: var(--gold-bright);
+}
+
+.purseSep {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--gold-deep);
+  flex-shrink: 0;
+}
+
+/* ---------- item grid ---------- */
+.grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 620px) {
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 940px) {
+  .grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* ---------- item card ---------- */
+.card {
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  transition:
+    border-color 0.3s var(--ease),
+    transform 0.3s var(--ease);
+}
+
+.card:hover {
+  border-color: var(--line-gold);
+  transform: translateY(-3px);
+}
+
+.cardSpent {
+  opacity: 0.55;
+}
+
+.cardSpent:hover {
+  transform: none;
+}
+
+.cardTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.badge {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--gold);
+  border: 1px solid var(--line-gold);
+  border-radius: var(--r);
+  background: color-mix(in srgb, var(--gold) 6%, transparent);
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 3px 6px;
+  color: var(--ink-mute);
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+}
+
+.tagTime {
+  color: var(--gold-bright);
+  border-color: var(--line-gold);
+}
+
+.name {
+  font-size: 1.05rem;
+  line-height: 1.25;
+  color: var(--ink);
+}
+
+.desc {
+  margin-top: 7px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-mute);
+}
+
+.foot {
+  margin-top: auto;
+  padding-top: 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ---------- buy control ---------- */
+.buyWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.buyBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  padding: 0.7em 1em;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #1a1409;
+  background: linear-gradient(180deg, var(--gold-bright), var(--gold));
+  border: 1px solid var(--gold);
+  border-radius: var(--r);
+  cursor: pointer;
+  transition: box-shadow 0.25s var(--ease), opacity 0.2s;
+}
+
+.buyBtn:hover:not(:disabled) {
+  box-shadow: 0 0 26px -6px var(--gold-glow);
+}
+
+.buyBtn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.buyError {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--bad-bright);
+}
+
+.buyState {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 0.7em 1em;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r);
+  justify-content: center;
+}
+
+.buyOwned {
+  color: var(--ok-bright);
+  border-color: color-mix(in srgb, var(--ok) 45%, transparent);
+  background: color-mix(in srgb, var(--ok) 8%, transparent);
+}
+
+.buyPending {
+  color: var(--gold-bright);
+  border-color: var(--line-gold);
+}
+
+.buySoldOut,
+.buyLocked {
+  color: var(--ink-faint);
+}
+
+/* ---------- empty ---------- */
+.empty {
+  margin-top: 24px;
+  padding: 28px;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-mute);
+  border: 1px dashed var(--line-2);
+  border-radius: var(--r);
+}
+
+/* ---------- coming soon ---------- */
+.soon {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: clamp(32px, 6vw, 56px) 28px;
+  text-align: center;
+  background: linear-gradient(180deg, var(--panel), var(--panel-2)), var(--bg);
+  border: 1px dashed var(--line-gold);
+  border-radius: var(--r);
+}
+
+.soonMark {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  color: var(--gold);
+  border: 1px solid var(--line-gold);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--gold) 6%, transparent);
+}
+
+.soonTitle {
+  font-family: var(--f-display);
+  font-size: clamp(1.2rem, 3vw, 1.5rem);
+  letter-spacing: 0.02em;
+  color: var(--gold-bright);
+}
+
+.soonText {
+  max-width: 44ch;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--ink-mute);
+}
