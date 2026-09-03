@@ -3,6 +3,10 @@
   inset: 0;
   z-index: 80;
   pointer-events: none;
+  /* shared anchor for the FAB + panel. bottom is raised to clear the
+     "Powered by Netlify" badge that sits in the bottom-right corner. */
+  --fab-x: clamp(16px, 4vw, 26px);
+  --fab-y: clamp(72px, calc(4vw + 52px), 84px);
 }
 
 .root > * {
@@ -12,8 +16,8 @@
 /* ---------- floating button ---------- */
 .fab {
   position: fixed;
-  right: clamp(16px, 4vw, 26px);
-  bottom: clamp(16px, 4vw, 26px);
+  right: var(--fab-x);
+  bottom: var(--fab-y);
   width: 56px;
   height: 56px;
   display: grid;
@@ -119,8 +123,8 @@
 /* ---------- panel ---------- */
 .panel {
   position: fixed;
-  right: clamp(16px, 4vw, 26px);
-  bottom: calc(clamp(16px, 4vw, 26px) + 68px);
+  right: var(--fab-x);
+  bottom: calc(var(--fab-y) + 68px);
   display: flex;
   flex-direction: column;
   width: min(94vw, 384px);
