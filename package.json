@@ -6,7 +6,6 @@
     "dev": "next dev --webpack",
     "dev:turbo": "next dev",
     "sync-knowledge": "node scripts/sync-knowledge.mjs",
-    "prebuild": "node scripts/sync-knowledge.mjs",
     "build": "prisma generate && next build",
     "build:webpack": "prisma generate && next build --webpack",
     "start": "next start",
