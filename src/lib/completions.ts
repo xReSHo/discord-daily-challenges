@@ -18,18 +18,31 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { addCurrency } from "@/lib/unbelievaboat";
 import { getChallengeDate } from "@/lib/challenge-date";
-import { SECTIONS, type SectionId } from "@/lib/sections";
+import { isDevMode } from "@/lib/dev-mode";
+import { SECTIONS, SECTION_IDS, type SectionId } from "@/lib/sections";
 
 export type CompleteResult =
   | { status: "rewarded"; amount: number; newBalance: number }
   | { status: "already_completed" }
-  | { status: "reward_failed"; message: string };
+  | { status: "reward_failed"; message: string }
+  /** Dev mode was on: the run was not recorded and nothing was paid out. */
+  | { status: "dev_mode" };
 
 export async function completeSection(
   discordId: string,
   sectionId: SectionId,
+  /** Override the fixed section reward — for games with a variable prize
+   *  (typing's fail-drop, litany's continue-bonus). Defaults to the config. */
+  rewardAmount?: number,
 ): Promise<CompleteResult> {
+  // Dev mode (admin only): don't touch the DB or the economy, just report it.
+  if (await isDevMode(discordId)) return { status: "dev_mode" };
+
   const section = SECTIONS[sectionId];
+  const reward =
+    rewardAmount != null && Number.isFinite(rewardAmount)
+      ? Math.max(0, Math.floor(rewardAmount))
+      : section.reward;
   const date = getChallengeDate();
   const key = {
     discordId_section_date: { discordId, section: sectionId, date },
@@ -42,7 +55,7 @@ export async function completeSection(
         discordId,
         section: sectionId,
         date,
-        rewardAmount: section.reward,
+        rewardAmount: reward,
         rewarded: false,
       },
     });
@@ -56,22 +69,23 @@ export async function completeSection(
     throw err;
   }
 
-  // 2. Pay out, rolling back the claim on failure.
+  // 2. Pay out, rolling back the claim on failure. A zero prize still counts as
+  //    a completion (streak/perfect-day) but moves no coins.
   try {
-    const balance = await addCurrency(
-      discordId,
-      section.reward,
-      `Daily challenge reward: ${section.label}`,
-    );
+    let newBalance = 0;
+    if (reward > 0) {
+      const balance = await addCurrency(
+        discordId,
+        reward,
+        `Daily challenge reward: ${section.label}`,
+      );
+      newBalance = balance.total;
+    }
     await prisma.completion.update({
       where: key,
       data: { rewarded: true },
     });
-    return {
-      status: "rewarded",
-      amount: section.reward,
-      newBalance: balance.total,
-    };
+    return { status: "rewarded", amount: reward, newBalance };
   } catch (err) {
     await prisma.completion.deleteMany({
       where: { discordId, section: sectionId, date, rewarded: false },
@@ -87,9 +101,12 @@ export async function completeSection(
 export async function getCompletedSectionsToday(
   discordId: string,
 ): Promise<Set<SectionId>> {
+  // Dev mode (admin only): nothing counts as done, so every game stays open.
+  if (await isDevMode(discordId)) return new Set();
+
   const date = getChallengeDate();
   const rows = await prisma.completion.findMany({
-    where: { discordId, date, rewarded: true },
+    where: { discordId, date, rewarded: true, section: { in: [...SECTION_IDS] } },
     select: { section: true },
   });
   return new Set(rows.map((r) => r.section as SectionId));

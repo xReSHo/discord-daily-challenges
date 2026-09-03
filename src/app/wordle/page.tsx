@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { Grid3x3 } from "lucide-react";
 import { getGameView } from "@/lib/wordle/game";
+import { isDevMode } from "@/lib/dev-mode";
 import { getChallengeDateString } from "@/lib/challenge-date";
 import { SECTIONS } from "@/lib/sections";
 import { AppFrame } from "@/components/AppFrame";
@@ -13,7 +14,10 @@ export default async function WordlePage() {
   const discordId = session?.user?.discordId;
   if (!discordId) redirect("/");
 
-  const view = await getGameView(discordId);
+  const [view, devMode] = await Promise.all([
+    getGameView(discordId),
+    isDevMode(discordId),
+  ]);
 
   return (
     <AppFrame back={{ href: "/dashboard", label: "All trials" }}>
@@ -25,7 +29,7 @@ export default async function WordlePage() {
           date={getChallengeDateString()}
         />
         <div className="game-stage">
-          <WordleBoard initialView={view} />
+          <WordleBoard initialView={view} devMode={devMode} />
         </div>
       </div>
     </AppFrame>

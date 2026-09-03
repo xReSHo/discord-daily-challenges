@@ -28,6 +28,15 @@ export type BossState = {
   dmgPerClick: number;
   rewardPool: number;
   penaltyEach: number;
+  /** Admin-spawned test boss — only admins see or fight it. */
+  adminOnly: boolean;
+  /** Whether resolving this boss moves real UnbelievaBoat coins. */
+  paysOut: boolean;
+  source: "weekly" | "manual";
+  /** True when the viewer is an admin (they may see an adminOnly boss). */
+  viewerIsAdmin: boolean;
+  /** Stable per-boss key (the spawn instant) — the Discord bot dedupes on it. */
+  bossKey: string;
 };
 
 export type HitResponse = {

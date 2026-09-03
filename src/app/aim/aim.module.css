@@ -108,13 +108,32 @@
     0 0 0 1px var(--gold-bright),
     0 0 26px 2px var(--gold-glow),
     0 0 60px 6px rgba(236, 202, 119, 0.12);
-  animation: targetIn 0.14s var(--ease);
+  /* Pops in, then shrinks and fades over its lifetime (--ttl). If it fully
+     runs out before you click, the run counts a miss. */
+  animation: targetLife var(--ttl, 1600ms) linear forwards;
 }
 
-@keyframes targetIn {
-  from {
+@keyframes targetLife {
+  0% {
     transform: translate(-50%, -50%) scale(0.5);
-    opacity: 0.4;
+    opacity: 0.45;
+  }
+  8% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  70% {
+    box-shadow:
+      0 0 0 1px var(--gold-bright),
+      0 0 26px 2px var(--gold-glow),
+      0 0 60px 6px rgba(236, 202, 119, 0.12);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(0.55);
+    opacity: 0.85;
+    box-shadow:
+      0 0 0 1px var(--bad-bright),
+      0 0 20px 2px rgba(214, 90, 74, 0.5);
   }
 }
 

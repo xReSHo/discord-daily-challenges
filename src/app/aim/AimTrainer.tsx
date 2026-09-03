@@ -4,7 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import styles from "./aim.module.css";
 
-const MAX_MISSES = 3; // clicks off every target before the run fails
+const MAX_MISSES = 3; // clicks off every target (or targets left to expire) before the run fails
+const TARGET_TTL_MS = 1600; // how long each target stays before it expires as a miss
+const MAX_TRIES = 3; // losing runs before the day's challenge is failed
 
 type Phase = "idle" | "countdown" | "playing" | "submitting" | "done";
 
@@ -15,30 +17,55 @@ type StartResponse = {
   timeLimitMs: number;
   token: string;
   alreadyCompleted: boolean;
+  failed: boolean;
+  tries: number;
+  maxTries: number;
 };
 
 type RewardResult =
   | { status: "rewarded"; amount: number; newBalance: number }
   | { status: "already_completed" }
-  | { status: "reward_failed"; message: string };
+  | { status: "reward_failed"; message: string }
+  | { status: "dev_mode" };
 
 type SubmitResponse =
   | { ok: true; avgMs: number; totalMs: number; reward: RewardResult }
-  | { ok: false; reason: string; avgMs?: number };
+  | {
+      ok: false;
+      reason: string;
+      avgMs?: number;
+      tries?: number;
+      maxTries?: number;
+      failed?: boolean;
+      locked?: boolean;
+    };
 
-/** A run that ended before submission (timed out) — shown like a rejection. */
+/** Shown immediately when a run ends client-side, until the server confirms. */
 type LocalFail = { ok: false; reason: string; local: true };
 
 type Hit = { i: number; x: number; y: number; t: number };
 
-export function AimTrainer({ completedToday }: { completedToday: boolean }) {
+export function AimTrainer({
+  completedToday,
+  failedToday,
+  triesUsed,
+}: {
+  completedToday: boolean;
+  failedToday: boolean;
+  triesUsed: number;
+}) {
   const router = useRouter();
-  const [phase, setPhase] = useState<Phase>(completedToday ? "done" : "idle");
+  const [phase, setPhase] = useState<Phase>(
+    completedToday || failedToday ? "done" : "idle",
+  );
+  const [locked, setLocked] = useState(failedToday);
+  const [tries, setTries] = useState(triesUsed);
   const [round, setRound] = useState<StartResponse | null>(null);
   const [hitCount, setHitCount] = useState(0);
   const [missCount, setMissCount] = useState(0);
   const [countdown, setCountdown] = useState(3);
   const [remainingMs, setRemainingMs] = useState(0);
+  const [targetNonce, setTargetNonce] = useState(0);
   const [result, setResult] = useState<SubmitResponse | LocalFail | null>(null);
   const [error, setError] = useState("");
 
@@ -58,13 +85,28 @@ export function AimTrainer({ completedToday }: { completedToday: boolean }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token: round.token, hits: hitsRef.current }),
       });
-      setResult((await res.json()) as SubmitResponse);
+      const data = (await res.json()) as SubmitResponse;
+      setResult(data);
+      if (!data.ok) {
+        if (data.failed) setLocked(true);
+        if (data.tries != null) setTries(data.tries);
+      }
     } catch {
       setError("Network error submitting your round. Try again.");
     } finally {
       setPhase("done");
     }
   }, [round]);
+
+  // A run ended client-side (timeout / misses). Let the server judge and record.
+  const failRun = useCallback(
+    (reason: string) => {
+      if (submittedRef.current) return;
+      setResult({ ok: false, local: true, reason });
+      void submit();
+    },
+    [submit],
+  );
 
   // countdown 3..2..1 then start the round clock
   useEffect(() => {
@@ -84,7 +126,7 @@ export function AimTrainer({ completedToday }: { completedToday: boolean }) {
     return () => clearInterval(id);
   }, [phase, round]);
 
-  // countdown timer while playing; fail on timeout
+  // overall round timer; fail on timeout
   useEffect(() => {
     if (phase !== "playing" || !round) return;
     const id = setInterval(() => {
@@ -92,18 +134,33 @@ export function AimTrainer({ completedToday }: { completedToday: boolean }) {
       const left = round.timeLimitMs - (performance.now() - roundStartRef.current);
       setRemainingMs(Math.max(0, left));
       if (left <= 0 && !submittedRef.current) {
-        submittedRef.current = true;
         clearInterval(id);
-        setResult({
-          ok: false,
-          local: true,
-          reason: `Time's up — you cleared ${hitsRef.current.length}/${round.count} targets.`,
-        });
-        setPhase("done");
+        failRun(
+          `Time's up — you cleared ${hitsRef.current.length}/${round.count} targets.`,
+        );
       }
     }, 50);
     return () => clearInterval(id);
-  }, [phase, round]);
+  }, [phase, round, failRun]);
+
+  // per-target expire clock
+  useEffect(() => {
+    if (phase !== "playing" || !round || submittedRef.current) return;
+    const id = setTimeout(() => {
+      if (submittedRef.current) return;
+      missesRef.current += 1;
+      setMissCount(missesRef.current);
+      if (missesRef.current >= MAX_MISSES) {
+        failRun(
+          `${MAX_MISSES} misses — the run is lost. You cleared ${hitsRef.current.length}/${round.count} targets.`,
+        );
+      } else {
+        setError("too slow!");
+        setTargetNonce((n) => n + 1);
+      }
+    }, TARGET_TTL_MS);
+    return () => clearTimeout(id);
+  }, [phase, round, hitCount, targetNonce, failRun]);
 
   async function start() {
     setError("");
@@ -111,7 +168,13 @@ export function AimTrainer({ completedToday }: { completedToday: boolean }) {
     try {
       const res = await fetch("/api/aim/start", { method: "POST" });
       const data = (await res.json()) as StartResponse;
+      setTries(data.tries);
       if (data.alreadyCompleted) {
+        setPhase("done");
+        return;
+      }
+      if (data.failed) {
+        setLocked(true);
         setPhase("done");
         return;
       }
@@ -121,6 +184,7 @@ export function AimTrainer({ completedToday }: { completedToday: boolean }) {
       roundStartRef.current = null;
       setHitCount(0);
       setMissCount(0);
+      setTargetNonce(0);
       setCountdown(3);
       setRound(data);
       setRemainingMs(data.timeLimitMs);
@@ -158,13 +222,9 @@ export function AimTrainer({ completedToday }: { completedToday: boolean }) {
     missesRef.current += 1;
     setMissCount(missesRef.current);
     if (missesRef.current >= MAX_MISSES) {
-      submittedRef.current = true;
-      setResult({
-        ok: false,
-        local: true,
-        reason: `${MAX_MISSES} misses — the run is lost. You cleared ${hitsRef.current.length}/${round.count} targets.`,
-      });
-      setPhase("done");
+      failRun(
+        `${MAX_MISSES} misses — the run is lost. You cleared ${hitsRef.current.length}/${round.count} targets.`,
+      );
     } else {
       setError("miss!");
     }
@@ -178,17 +238,40 @@ export function AimTrainer({ completedToday }: { completedToday: boolean }) {
 
   const goToDashboard = () => router.push("/dashboard");
 
+  const triesLeft = Math.max(0, MAX_TRIES - tries);
+
   if (phase === "done") {
+    if (locked) {
+      return (
+        <div className={styles.card}>
+          <div className={styles.resultBlock}>
+            <strong className={styles.rejected}>Challenge failed</strong>
+            <p>
+              That was your last of {MAX_TRIES} tries for today&apos;s aim round.
+              Come back after midnight.
+            </p>
+          </div>
+          <button className={styles.button} onClick={goToDashboard}>
+            Back to trials
+          </button>
+        </div>
+      );
+    }
     const won = result !== null && result.ok;
     return (
       <div className={styles.card}>
-        <ResultView result={result} error={error} completedToday={completedToday} />
+        <ResultView
+          result={result}
+          error={error}
+          completedToday={completedToday}
+          triesLeft={triesLeft}
+        />
         {!(result === null && completedToday) && (
           <button
             className={styles.button}
-            onClick={won ? goToDashboard : restart}
+            onClick={won || triesLeft === 0 ? goToDashboard : restart}
           >
-            {won ? "Done" : "Try again"}
+            {won ? "Done" : triesLeft === 0 ? "Back to trials" : "Try again"}
           </button>
         )}
       </div>
@@ -200,13 +283,14 @@ export function AimTrainer({ completedToday }: { completedToday: boolean }) {
       <div className={styles.card}>
         <p className={styles.lead}>
           Click every target before the timer runs out. There are{" "}
-          {round?.count ?? 20}, and a short countdown before it begins.{" "}
-          {MAX_MISSES} clicks off-target fails the run. Clean clicks are
-          rewarded; robotic patterns are rejected.
+          {round?.count ?? 22}, and a short countdown before it begins. Each
+          target vanishes after {(TARGET_TTL_MS / 1000).toFixed(1)}s — let it
+          expire and it counts as a miss. {MAX_MISSES} misses fails the run, and
+          you get <strong>{MAX_TRIES} tries total</strong> for the day.
         </p>
         {error && <p className={styles.error}>{error}</p>}
         <button className={styles.button} onClick={start}>
-          Start round
+          Start round {tries > 0 ? `(try ${tries + 1} of ${MAX_TRIES})` : ""}
         </button>
       </div>
     );
@@ -230,25 +314,25 @@ export function AimTrainer({ completedToday }: { completedToday: boolean }) {
         </span>
       </div>
 
-      <div
-        ref={areaRef}
-        className={styles.area}
-        onClick={onAreaMiss}
-      >
+      <div ref={areaRef} className={styles.area} onClick={onAreaMiss}>
         {phase === "countdown" && (
           <div className={styles.countdown}>{countdown}</div>
         )}
 
         {phase === "playing" && target && (
           <button
+            key={`${hitCount}-${targetNonce}`}
             type="button"
             className={styles.target}
             onClick={onTargetClick}
-            style={{
-              left: `${target.x * 100}%`,
-              top: `${target.y * 100}%`,
-              width: `${round!.radius * 2 * 100}%`,
-            }}
+            style={
+              {
+                left: `${target.x * 100}%`,
+                top: `${target.y * 100}%`,
+                width: `${round!.radius * 2 * 100}%`,
+                "--ttl": `${TARGET_TTL_MS}ms`,
+              } as React.CSSProperties
+            }
             aria-label={`target ${hitCount + 1}`}
           />
         )}
@@ -258,9 +342,10 @@ export function AimTrainer({ completedToday }: { completedToday: boolean }) {
         )}
       </div>
 
-      {phase === "playing" && error === "miss!" && (
+      {phase === "playing" && (error === "miss!" || error === "too slow!") && (
         <p className={styles.hint}>
-          Missed — {MAX_MISSES - missCount} left before the run fails.
+          {error === "too slow!" ? "Too slow" : "Missed"} —{" "}
+          {MAX_MISSES - missCount} left before the run fails.
         </p>
       )}
     </div>
@@ -271,10 +356,12 @@ function ResultView({
   result,
   error,
   completedToday,
+  triesLeft,
 }: {
   result: SubmitResponse | LocalFail | null;
   error: string;
   completedToday: boolean;
+  triesLeft: number;
 }) {
   if (!result) {
     if (error) return <p className={styles.error}>{error}</p>;
@@ -292,12 +379,19 @@ function ResultView({
     return (
       <div className={styles.resultBlock}>
         <strong className={styles.rejected}>
-          {"local" in result ? "Failed" : "Round rejected"}
+          {"local" in result || !result.reason.includes("rejected")
+            ? "Failed"
+            : "Round rejected"}
         </strong>
         <p>{result.reason}</p>
-        {"avgMs" in result && result.avgMs != null && (
+        {!("local" in result) && result.avgMs != null && (
           <p className={styles.muted}>{result.avgMs} ms per target</p>
         )}
+        <p className={styles.muted}>
+          {triesLeft > 0
+            ? `${triesLeft} ${triesLeft === 1 ? "try" : "tries"} left today.`
+            : "No tries left — no reward today."}
+        </p>
       </div>
     );
   }
@@ -322,6 +416,9 @@ function RewardLine({ reward }: { reward: RewardResult }) {
   }
   if (reward.status === "already_completed") {
     return <p className={styles.reward}>Already rewarded today.</p>;
+  }
+  if (reward.status === "dev_mode") {
+    return <p className={styles.muted}>Dev mode — round not recorded, no payout.</p>;
   }
   return (
     <p className={styles.rewardFailed}>

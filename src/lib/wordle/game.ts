@@ -17,6 +17,8 @@ import {
   getCompletedSectionsToday,
   type CompleteResult,
 } from "@/lib/completions";
+import { lockNow } from "@/lib/attempts";
+import { isDevMode } from "@/lib/dev-mode";
 import { getDailyWord } from "./daily";
 import { evaluateGuess, type Mark } from "./evaluate";
 import { ALLOWED_GUESSES } from "./allowed";
@@ -67,12 +69,22 @@ async function readGame(discordId: string, date: Date): Promise<GameRow> {
 
 export async function getGameView(discordId: string): Promise<GameView> {
   const date = getChallengeDate();
+
+  // Dev mode (admin only): wipe a finished board so re-opening /wordle starts a
+  // fresh game. An in-progress game is left alone, so mid-game reloads are safe.
+  if (await isDevMode(discordId)) {
+    await prisma.wordleGame.deleteMany({ where: { discordId, date, finished: true } });
+  }
+
   // Runs concurrently on the connection pool. getDailyWord is usually cached.
   const [game, word, completed] = await Promise.all([
     readGame(discordId, date),
     getDailyWord(),
     getCompletedSectionsToday(discordId),
   ]);
+  // A finished-but-lost game is a failed challenge for the day — record it so
+  // the dashboard / admin log reflect it. Idempotent (upsert to failed).
+  if (game.finished && !game.won) await lockNow(discordId, SECTION);
   return toView(game, word, game.won && completed.has(SECTION));
 }
 
@@ -138,6 +150,7 @@ export async function submitGuess(
   if (!applied) {
     // Lost the race - report the current stored state without applying.
     const fresh = await readGame(discordId, date);
+    if (fresh.finished && !fresh.won) await lockNow(discordId, SECTION);
     const rewarded =
       fresh.won && (await getCompletedSectionsToday(discordId)).has(SECTION);
     return { ok: true, view: toView(fresh, word, rewarded), reward: null };
@@ -152,6 +165,9 @@ export async function submitGuess(
     rewarded =
       reward.status === "rewarded" ||
       (await getCompletedSectionsToday(discordId)).has(SECTION);
+  } else if (finished) {
+    // Ran out of guesses — a failed challenge for the day.
+    await lockNow(discordId, SECTION);
   }
 
   return { ok: true, view: toView(updated, word, rewarded), reward };

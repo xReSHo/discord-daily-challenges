@@ -3,14 +3,15 @@
  *
  * The server issues a signed token at round start (carrying `iat`). On submit
  * the client returns, for each target in order, the click position and the
- * time in ms since the round clock started (which is when the first target
- * became visible, after the countdown). The server checks:
+ * time in ms since the round clock started. The server checks:
  *   - every click actually landed on its target (distance)
  *   - the timing is physically possible (reaction floor, per-shot floor,
  *     total time fits inside the server's window)
  *   - all targets were cleared before the time limit
- *   - the pattern isn't synthetic (identical intervals = a replay/bot,
- *     pixel-perfect centre hits = generated coordinates)
+ *   - the pattern isn't synthetic (identical intervals, pixel-perfect centres)
+ *
+ * Retry economy: MAX_TRIES losing runs and the day's challenge is failed
+ * (locked). See src/lib/attempts.ts.
  */
 
 import { getChallengeDateString } from "@/lib/challenge-date";
@@ -20,7 +21,9 @@ import {
   getCompletedSectionsToday,
   type CompleteResult,
 } from "@/lib/completions";
+import { getAttempt, recordFail } from "@/lib/attempts";
 import { flagAttempt } from "@/lib/audit";
+import { recordScore } from "@/lib/scores";
 import { getDailyTargets, type AimTargets } from "./daily";
 
 const SECTION = "aim" as const;
@@ -30,10 +33,13 @@ const MIN_FIRST_MS = 120; // reaction time to the first target
 const MIN_INTERVAL_MS = 80; // fastest plausible target-to-target
 const HIT_TOLERANCE = 1.5; // click must be within radius * this of the centre
 
+/** Losing runs allowed before the day's challenge is failed. */
+export const MAX_TRIES = Math.max(1, Number(process.env.AIM_MAX_TRIES) || 3);
+
 /** Total time allowed to clear every target. */
 export const TIME_LIMIT_MS = Math.max(
   5000,
-  Number(process.env.AIM_TIME_LIMIT_MS) || 20000,
+  Number(process.env.AIM_TIME_LIMIT_MS) || 18000,
 );
 
 export type StartResult = {
@@ -43,12 +49,17 @@ export type StartResult = {
   timeLimitMs: number;
   token: string;
   alreadyCompleted: boolean;
+  failed: boolean;
+  /** Losing runs used so far today. */
+  tries: number;
+  maxTries: number;
 };
 
 export async function startRound(discordId: string): Promise<StartResult> {
-  const [layout, completed] = await Promise.all([
+  const [layout, completed, attempt] = await Promise.all([
     getDailyTargets(),
     getCompletedSectionsToday(discordId),
+    getAttempt(discordId, SECTION),
   ]);
   const token = signToken({ d: discordId, day: getChallengeDateString(), s: SECTION });
   return {
@@ -56,6 +67,9 @@ export async function startRound(discordId: string): Promise<StartResult> {
     timeLimitMs: TIME_LIMIT_MS,
     token,
     alreadyCompleted: completed.has(SECTION),
+    failed: attempt.failed,
+    tries: attempt.fails,
+    maxTries: MAX_TRIES,
   };
 }
 
@@ -64,7 +78,15 @@ type Hit = { i: number; x: number; y: number; t: number };
 
 export type SubmitResult =
   | { ok: true; avgMs: number; totalMs: number; reward: CompleteResult }
-  | { ok: false; reason: string; avgMs?: number };
+  | {
+      ok: false;
+      reason: string;
+      avgMs?: number;
+      tries?: number;
+      maxTries?: number;
+      failed?: boolean;
+      locked?: boolean;
+    };
 
 function stdev(xs: number[]): number {
   if (xs.length < 2) return 0;
@@ -107,18 +129,50 @@ export async function submitRound(
     return { ok: false, reason: "Session expired. Start the round again." };
   }
 
+  const before = await getAttempt(discordId, SECTION);
+  if (before.failed) {
+    return {
+      ok: false,
+      reason: "You're out of tries for today's aim round.",
+      locked: true,
+      failed: true,
+      tries: before.fails,
+      maxTries: MAX_TRIES,
+    };
+  }
+
+  async function lose(reason: string, extra: { avgMs?: number } = {}) {
+    const after = await recordFail(discordId, SECTION, { lockAt: MAX_TRIES });
+    return {
+      ok: false as const,
+      reason,
+      ...extra,
+      tries: after.fails,
+      maxTries: MAX_TRIES,
+      failed: after.failed,
+    };
+  }
+
   const layout: AimTargets = await getDailyTargets();
+
+  // An incomplete run (client timed out / missed out) — a genuine loss, not
+  // malformed. More hits than targets *is* malformed.
+  if (Array.isArray(input.hits) && input.hits.length < layout.count) {
+    return lose(
+      `Round lost — cleared ${input.hits.length}/${layout.count} targets.`,
+    );
+  }
+
   const hits = parseHits(input.hits, layout.count);
   if (!hits) {
     flagAttempt(discordId, SECTION, "malformed round data");
-    return { ok: false, reason: "Malformed or incomplete round data." };
+    return lose("Malformed or incomplete round data.");
   }
 
-  // --- every click landed on its target ---
   for (const h of hits) {
     const target = layout.targets[h.i];
     const dx = h.x - target.x;
-    const dy = (h.y - target.y) / ASPECT; // convert y-fraction to width-relative
+    const dy = (h.y - target.y) / ASPECT;
     const dist = Math.hypot(dx, dy);
     if (dist > layout.radius * HIT_TOLERANCE) {
       flagAttempt(discordId, SECTION, "click missed its target", {
@@ -126,16 +180,15 @@ export async function submitRound(
         dist: Number(dist.toFixed(4)),
         tolerance: Number((layout.radius * HIT_TOLERANCE).toFixed(4)),
       });
-      return { ok: false, reason: "Some clicks missed their target." };
+      return lose("Some clicks missed their target.");
     }
   }
 
-  // --- timing is physically possible ---
   const times = hits.map((h) => h.t);
   for (let k = 1; k < times.length; k++) {
     if (times[k] <= times[k - 1]) {
       flagAttempt(discordId, SECTION, "click timestamps not increasing");
-      return { ok: false, reason: "Click timestamps are not increasing." };
+      return lose("Click timestamps are not increasing.");
     }
   }
   if (times[0] < MIN_FIRST_MS) {
@@ -143,7 +196,7 @@ export async function submitRound(
       firstMs: times[0],
       floor: MIN_FIRST_MS,
     });
-    return { ok: false, reason: "Impossibly fast reaction to the first target." };
+    return lose("Impossibly fast reaction to the first target.");
   }
   const intervals = times.slice(1).map((t, k) => t - times[k]);
   if (intervals.some((iv) => iv < MIN_INTERVAL_MS)) {
@@ -151,7 +204,7 @@ export async function submitRound(
       minInterval: Math.round(Math.min(...intervals)),
       floor: MIN_INTERVAL_MS,
     });
-    return { ok: false, reason: "Clicks came faster than humanly possible." };
+    return lose("Clicks came faster than humanly possible.");
   }
   const totalMs = times[times.length - 1];
   if (totalMs > windowMs + 1500) {
@@ -159,24 +212,20 @@ export async function submitRound(
       totalMs: Math.round(totalMs),
       windowMs,
     });
-    return { ok: false, reason: "Reported time doesn't fit the session window." };
+    return lose("Reported time doesn't fit the session window.");
   }
 
-  // --- cleared before the time limit ---
   if (totalMs > TIME_LIMIT_MS) {
-    return {
-      ok: false,
-      reason: "Ran out of time - hit every target before the timer ends.",
+    return lose("Ran out of time — hit every target before the timer ends.", {
       avgMs: Math.round(totalMs / layout.count),
-    };
+    });
   }
 
-  // --- not a synthetic pattern ---
   if (stdev(intervals) < 10) {
     flagAttempt(discordId, SECTION, "robotic timing pattern", {
       intervalStdev: Number(stdev(intervals).toFixed(2)),
     });
-    return { ok: false, reason: "Robotic timing pattern - rejected." };
+    return lose("Robotic timing pattern - rejected.");
   }
   const meanCentreOffset =
     hits.reduce((a, h) => {
@@ -187,10 +236,11 @@ export async function submitRound(
     flagAttempt(discordId, SECTION, "pixel-perfect centre hits (generated coords)", {
       meanCentreOffset: Number(meanCentreOffset.toFixed(5)),
     });
-    return { ok: false, reason: "Clicks are pixel-perfect - rejected." };
+    return lose("Clicks are pixel-perfect - rejected.");
   }
 
   const avgMs = Math.round(totalMs / layout.count);
   const reward = await completeSection(discordId, SECTION);
+  recordScore(discordId, SECTION, "aimMs", avgMs);
   return { ok: true, avgMs, totalMs: Math.round(totalMs), reward };
 }

@@ -19,23 +19,50 @@ type StartResponse = {
   text: string;
   token: string;
   alreadyCompleted: boolean;
+  failed: boolean;
+  fails: number;
+  prize: number;
 };
 
 type SubmitResponse =
   | { ok: true; wpm: number; accuracy: number; reward: RewardResult }
-  | { ok: false; reason: string; wpm?: number; accuracy?: number };
+  | {
+      ok: false;
+      reason: string;
+      wpm?: number;
+      accuracy?: number;
+      fails?: number;
+      prize?: number;
+      failed?: boolean;
+      locked?: boolean;
+    };
 
-/** A run that ended before submission (strikes / too slow). */
+/** A run that ended before submission — kept only until the server confirms it. */
 type LocalFail = { ok: false; reason: string; local: true };
 
 type RewardResult =
   | { status: "rewarded"; amount: number; newBalance: number }
   | { status: "already_completed" }
-  | { status: "reward_failed"; message: string };
+  | { status: "reward_failed"; message: string }
+  | { status: "dev_mode" };
 
-export function TypingTest({ completedToday }: { completedToday: boolean }) {
+export function TypingTest({
+  completedToday,
+  failedToday,
+  prize: initialPrize,
+  basePrize,
+}: {
+  completedToday: boolean;
+  failedToday: boolean;
+  prize: number;
+  basePrize: number;
+}) {
   const router = useRouter();
-  const [phase, setPhase] = useState<Phase>(completedToday ? "done" : "idle");
+  const [phase, setPhase] = useState<Phase>(
+    completedToday || failedToday ? "done" : "idle",
+  );
+  const [locked, setLocked] = useState(failedToday);
+  const [prize, setPrize] = useState(initialPrize);
   const [text, setText] = useState("");
   const [token, setToken] = useState("");
   const [typed, setTyped] = useState("");
@@ -53,6 +80,7 @@ export function TypingTest({ completedToday }: { completedToday: boolean }) {
   const typedRef = useRef("");
   const textRef = useRef("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const autoStartingRef = useRef(false); // guards the mount auto-start (StrictMode)
 
   const correctChars = useMemo(() => {
     let n = 0;
@@ -67,44 +95,6 @@ export function TypingTest({ completedToday }: { completedToday: boolean }) {
   const liveAcc = typed.length
     ? Math.round((correctChars / typed.length) * 100)
     : 100;
-
-  const failLocal = useCallback((reason: string) => {
-    if (submittedRef.current) return;
-    submittedRef.current = true;
-    setResult({ ok: false, reason, local: true });
-    setPhase("done");
-  }, []);
-
-  // elapsed clock + live speed-floor check while typing
-  useEffect(() => {
-    if (phase !== "typing") return;
-    const id = setInterval(() => {
-      if (!startRef.current) return;
-      const secs = (performance.now() - startRef.current) / 1000;
-      setElapsed(secs);
-
-      // Stopped typing entirely — fail fast, don't wait for the cumulative
-      // average to crawl below the floor.
-      if (
-        secs > WPM_GRACE_SEC &&
-        lastInputAtRef.current > 0 &&
-        performance.now() - lastInputAtRef.current > IDLE_FAIL_MS
-      ) {
-        failLocal("You stopped typing — run lost.");
-        return;
-      }
-
-      const t = typedRef.current;
-      const g = textRef.current;
-      let correct = 0;
-      for (let i = 0; i < t.length; i++) if (t[i] === g[i]) correct++;
-      const wpm = correct / 5 / (secs / 60);
-      if (secs > WPM_GRACE_SEC && t.length >= WPM_GRACE_CHARS && wpm < MIN_WPM) {
-        failLocal(`Speed dropped below ${MIN_WPM} WPM.`);
-      }
-    }, 200);
-    return () => clearInterval(id);
-  }, [phase, failLocal]);
 
   const submit = useCallback(
     async (finalTyped: string) => {
@@ -126,7 +116,12 @@ export function TypingTest({ completedToday }: { completedToday: boolean }) {
             strikes: strikesRef.current,
           }),
         });
-        setResult((await res.json()) as SubmitResponse);
+        const data = (await res.json()) as SubmitResponse;
+        setResult(data);
+        if (!data.ok) {
+          if (data.failed) setLocked(true);
+          if (data.prize != null) setPrize(data.prize);
+        }
         setPhase("done");
       } catch {
         setError("Network error submitting your result. Try again.");
@@ -136,13 +131,59 @@ export function TypingTest({ completedToday }: { completedToday: boolean }) {
     [token],
   );
 
-  async function startTest() {
+  // A run ended client-side (strikes / idle / too slow). Let the server be the
+  // judge — it records the losing attempt and returns the new prize.
+  const failLocal = useCallback(
+    (reason: string) => {
+      if (submittedRef.current) return;
+      setResult({ ok: false, reason, local: true });
+      void submit(typedRef.current);
+    },
+    [submit],
+  );
+
+  // elapsed clock + live speed-floor check while typing
+  useEffect(() => {
+    if (phase !== "typing") return;
+    const id = setInterval(() => {
+      if (!startRef.current) return;
+      const secs = (performance.now() - startRef.current) / 1000;
+      setElapsed(secs);
+
+      if (
+        secs > WPM_GRACE_SEC &&
+        lastInputAtRef.current > 0 &&
+        performance.now() - lastInputAtRef.current > IDLE_FAIL_MS
+      ) {
+        failLocal("You stopped typing — run lost.");
+        return;
+      }
+
+      const t = typedRef.current;
+      const g = textRef.current;
+      let correct = 0;
+      for (let i = 0; i < t.length; i++) if (t[i] === g[i]) correct++;
+      const wpm = correct / 5 / (secs / 60);
+      if (secs > WPM_GRACE_SEC && t.length >= WPM_GRACE_CHARS && wpm < MIN_WPM) {
+        failLocal(`Speed dropped below ${MIN_WPM} WPM.`);
+      }
+    }, 200);
+    return () => clearInterval(id);
+  }, [phase, failLocal]);
+
+  const startTest = useCallback(async () => {
     setError("");
     setResult(null);
     try {
       const res = await fetch("/api/typing/start", { method: "POST" });
       const data = (await res.json()) as StartResponse;
+      setPrize(data.prize);
       if (data.alreadyCompleted) {
+        setPhase("done");
+        return;
+      }
+      if (data.failed) {
+        setLocked(true);
         setPhase("done");
         return;
       }
@@ -164,7 +205,26 @@ export function TypingTest({ completedToday }: { completedToday: boolean }) {
     } catch {
       setError("Could not start the test. Try again.");
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    if (phase !== "idle" || completedToday || failedToday) return;
+    if (autoStartingRef.current) return;
+    autoStartingRef.current = true;
+    void startTest().finally(() => {
+      autoStartingRef.current = false;
+    });
+  }, [phase, completedToday, failedToday, startTest]);
+
+  useEffect(() => {
+    if (phase === "ready" || phase === "typing") inputRef.current?.focus();
+  }, [phase]);
+
+  const refocusInput = useCallback(() => {
+    if (phase === "ready" || phase === "typing") {
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
+  }, [phase]);
 
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (phase !== "ready" && phase !== "typing") return;
@@ -183,9 +243,6 @@ export function TypingTest({ completedToday }: { completedToday: boolean }) {
     lastInputAtRef.current = performance.now();
     const next = e.target.value.slice(0, text.length);
 
-    // Any newly-added wrong characters count as ONE strike, and only if we're
-    // past the grace window since the last one — so a two-key slip, or a wrong
-    // letter followed by space, is a single strike, not two.
     let hasNewMistake = false;
     for (let i = typed.length; i < next.length; i++) {
       if (next[i] !== text[i]) {
@@ -229,10 +286,31 @@ export function TypingTest({ completedToday }: { completedToday: boolean }) {
   // ---- render ----
 
   if (phase === "done") {
+    if (locked) {
+      return (
+        <div className={styles.card}>
+          <div className={styles.resultBlock}>
+            <strong className={styles.rejected}>Challenge failed</strong>
+            <p>
+              You&apos;ve used up today&apos;s typing attempts. Come back after
+              midnight.
+            </p>
+          </div>
+          <button className={styles.button} onClick={goToDashboard}>
+            Back to trials
+          </button>
+        </div>
+      );
+    }
     const won = result !== null && result.ok;
     return (
       <div className={styles.card}>
-        <ResultView result={result} error={error} completedToday={completedToday} />
+        <ResultView
+          result={result}
+          error={error}
+          completedToday={completedToday}
+          prize={prize}
+        />
         {!(result === null && completedToday) && (
           <button
             className={styles.button}
@@ -249,31 +327,53 @@ export function TypingTest({ completedToday }: { completedToday: boolean }) {
     return (
       <div className={styles.card}>
         <p className={styles.lead}>
-          Type the paragraph exactly. The timer starts on your first keystroke.
-          Pasting is blocked, {MAX_STRIKES} mistakes fails the run, and so does
-          dropping under {MIN_WPM} WPM. A quick slip of a couple of keys counts
-          as one mistake.
+          {error
+            ? "Couldn't load today's paragraph."
+            : "Loading today's paragraph…"}
         </p>
         {error && <p className={styles.error}>{error}</p>}
-        <button className={styles.button} onClick={startTest}>
-          Start test
-        </button>
+        {error && (
+          <button className={styles.button} onClick={() => void startTest()}>
+            Try again
+          </button>
+        )}
       </div>
     );
   }
 
   return (
     <div className={styles.card}>
+      {phase === "ready" && (
+        <p className={styles.lead}>
+          Just start typing — the timer begins on your first keystroke. Pasting
+          is blocked, {MAX_STRIKES} mistakes fails the run, and so does dropping
+          under {MIN_WPM} WPM.{" "}
+          {prize < basePrize
+            ? `Today's prize has dropped to ${prize} — a few more fails and it's gone.`
+            : `Win it and bank ${prize} coins.`}
+        </p>
+      )}
       <div className={styles.stats}>
         <span>{Math.floor(elapsed)}s</span>
         <span>{liveWpm} wpm</span>
         <span>{liveAcc}% acc</span>
+        <span className={prize < basePrize ? styles.strikeActive : undefined}>
+          ◈ {prize}
+        </span>
         <span className={strikes > 0 ? styles.strikeActive : undefined}>
           ✗ {strikes}/{MAX_STRIKES}
         </span>
       </div>
 
-      <div className={styles.textWrap}>
+      <div
+        className={styles.textWrap}
+        onMouseDown={(e) => {
+          if (e.target !== inputRef.current) {
+            e.preventDefault();
+            inputRef.current?.focus();
+          }
+        }}
+      >
         <div className={styles.display} aria-hidden>
           {text.split("").map((ch, i) => {
             const state =
@@ -298,7 +398,9 @@ export function TypingTest({ completedToday }: { completedToday: boolean }) {
           onChange={onChange}
           onKeyDown={onKeyDown}
           onPaste={onPaste}
+          onBlur={refocusInput}
           disabled={phase === "submitting"}
+          autoFocus
           spellCheck={false}
           autoCorrect="off"
           autoCapitalize="off"
@@ -320,10 +422,12 @@ function ResultView({
   result,
   error,
   completedToday,
+  prize,
 }: {
   result: SubmitResponse | LocalFail | null;
   error: string;
   completedToday: boolean;
+  prize: number;
 }) {
   if (!result) {
     if (error) return <p className={styles.error}>{error}</p>;
@@ -338,19 +442,27 @@ function ResultView({
   }
 
   if (!result.ok) {
+    const serverFail = !("local" in result);
     return (
       <div className={styles.resultBlock}>
         <strong className={styles.rejected}>
-          {"local" in result ? "Failed" : "Run rejected"}
+          {serverFail && "reason" in result && result.reason.includes("rejected")
+            ? "Run rejected"
+            : "Failed"}
         </strong>
         <p>{result.reason}</p>
-        {"wpm" in result && result.wpm != null && (
+        {serverFail && "wpm" in result && result.wpm != null && (
           <p className={styles.muted}>
             {result.wpm} wpm
             {result.accuracy != null &&
               ` · ${Math.round(result.accuracy * 100)}% accuracy`}
           </p>
         )}
+        <p className={styles.muted}>
+          {prize > 0
+            ? `Today's prize is now ${prize}. Try again.`
+            : "That was the last try — no reward today."}
+        </p>
       </div>
     );
   }
@@ -375,6 +487,9 @@ function RewardLine({ reward }: { reward: RewardResult }) {
   }
   if (reward.status === "already_completed") {
     return <p className={styles.reward}>Already rewarded today.</p>;
+  }
+  if (reward.status === "dev_mode") {
+    return <p className={styles.muted}>Dev mode — run not recorded, no payout.</p>;
   }
   return (
     <p className={styles.rewardFailed}>

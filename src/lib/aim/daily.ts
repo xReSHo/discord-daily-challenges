@@ -4,9 +4,9 @@ import { getOrCreateDailyContent } from "@/lib/daily-content";
 const SEED = process.env.AIM_SEED ?? "daily-challenges";
 const SECTION = "aim";
 
-export const TARGET_COUNT = 20;
+export const TARGET_COUNT = 22;
 /** Target radius as a fraction of the play-area width. */
-export const TARGET_RADIUS = 0.055;
+export const TARGET_RADIUS = 0.05;
 
 /** Small, fast, seedable PRNG. */
 function mulberry32(seed: number): () => number {

@@ -54,6 +54,7 @@ export function BossArena({ initial }: { initial: BossState }) {
   const [captcha, setCaptcha] = useState<Captcha | null>(null);
   const [captchaInput, setCaptchaInput] = useState("");
   const [captchaBad, setCaptchaBad] = useState(false);
+  const [despawning, setDespawning] = useState(false);
 
   const pendingRef = useRef(0); // clicks not yet sent
   const unackedRef = useRef(0); // clicks in the in-flight request
@@ -251,12 +252,36 @@ export function BossArena({ initial }: { initial: BossState }) {
   const expiresIn = new Date(server.expiresAt).getTime() - now;
   const nextIn = new Date(server.nextSpawnsAt).getTime() - now;
 
+  const adminNote = server.viewerIsAdmin ? (
+    <span className={styles.adminBar}>
+      <a href="/admin/boss" className={styles.adminLink}>
+        Boss control →
+      </a>
+      {server.status === "active" && (
+        <button
+          type="button"
+          className={styles.despawnBtn}
+          disabled={despawning}
+          onClick={() => {
+            setDespawning(true);
+            fetch("/api/boss/despawn", { method: "POST" }).finally(() =>
+              window.location.reload(),
+            );
+          }}
+        >
+          {despawning ? "Despawning…" : "Despawn (test)"}
+        </button>
+      )}
+    </span>
+  ) : null;
+
   // ---------- upcoming ----------
   if (server.status === "upcoming") {
     return (
       <div className={styles.card}>
         <p className="eyebrow">The Weekly Raid</p>
         <h1 className={styles.name}>{server.name}</h1>
+        {adminNote}
         <BossPortrait dimmed />
         <p className={styles.lead}>
           The Hollow Sovereign returns in{" "}
@@ -279,6 +304,7 @@ export function BossArena({ initial }: { initial: BossState }) {
       <div className={styles.card}>
         <p className="eyebrow">The Weekly Raid</p>
         <h1 className={styles.name}>{server.name}</h1>
+        {adminNote}
         <BossPortrait fallen={server.slain} dimmed />
         {server.slain ? (
           <p className={`${styles.lead} ${styles.won}`}>Veyrath has fallen.</p>
@@ -299,8 +325,17 @@ export function BossArena({ initial }: { initial: BossState }) {
   // ---------- active ----------
   return (
     <div className={styles.card}>
-      <p className="eyebrow">The Weekly Raid — fight now</p>
+      <p className="eyebrow">
+        {server.adminOnly ? "Test Raid — admins only" : "The Weekly Raid — fight now"}
+      </p>
       <h1 className={styles.name}>{server.name}</h1>
+      {(server.adminOnly || !server.paysOut) && (
+        <p className={styles.testFlag}>
+          {server.adminOnly && "Only admins can see this fight. "}
+          {!server.paysOut && "No coins are paid out for it."}
+        </p>
+      )}
+      {adminNote}
 
       <div className={styles.hpWrap}>
         <div className={styles.hpBar}>

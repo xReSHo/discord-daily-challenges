@@ -30,7 +30,7 @@
   font-weight: 600;
   text-transform: uppercase;
   color: var(--ink);
-  background: #14100b;
+  background: var(--wordle-empty);
   border: 1px solid var(--line-2);
   border-radius: var(--r);
   user-select: none;
@@ -65,8 +65,8 @@
 
 .absent {
   color: var(--ink-mute);
-  background: #100d09;
-  border-color: #201a12;
+  background: var(--wordle-absent);
+  border-color: var(--wordle-absent-border);
 }
 
 .reveal .tile {
@@ -267,7 +267,7 @@
 
 .key.absent {
   color: var(--ink-faint);
-  background: #0d0b08;
-  border-color: #1a1610;
+  background: var(--wordle-absent);
+  border-color: var(--wordle-absent-border);
   opacity: 0.7;
 }

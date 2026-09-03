@@ -21,7 +21,13 @@ function aggregateKeyMarks(rows: GameView["rows"]): Record<string, Mark> {
   return map;
 }
 
-export function WordleBoard({ initialView }: { initialView: GameView }) {
+export function WordleBoard({
+  initialView,
+  devMode = false,
+}: {
+  initialView: GameView;
+  devMode?: boolean;
+}) {
   const [view, setView] = useState(initialView);
   const [current, setCurrent] = useState("");
   const [error, setError] = useState("");
@@ -173,7 +179,13 @@ export function WordleBoard({ initialView }: { initialView: GameView }) {
         })}
       </div>
 
-      <Banner view={view} reward={reward} busy={busy} onClaim={claimReward} />
+      <Banner
+        view={view}
+        reward={reward}
+        busy={busy}
+        onClaim={claimReward}
+        devMode={devMode}
+      />
       <div className={styles.error}>{error}</div>
 
       <div className={styles.keyboard}>
@@ -223,11 +235,13 @@ function Banner({
   reward,
   busy,
   onClaim,
+  devMode,
 }: {
   view: GameView;
   reward: CompleteResult | null;
   busy: boolean;
   onClaim: () => void;
+  devMode: boolean;
 }) {
   if (view.status === "in_progress") {
     return <div className={styles.banner} />;
@@ -241,12 +255,27 @@ function Banner({
         </span>
       ) : (
         <span className={styles.bannerLost}>
-          Out of guesses &mdash; the word was <b>{view.answer?.toUpperCase()}</b>
+          Challenge failed &mdash; out of guesses. The word was{" "}
+          <b>{view.answer?.toUpperCase()}</b>. Back after midnight.
         </span>
       )}
 
-      {view.status === "won" && (
-        <RewardLine view={view} reward={reward} busy={busy} onClaim={onClaim} />
+      {devMode ? (
+        <>
+          <span className={styles.rewardFailed}>
+            Dev mode — game not recorded, no payout.
+          </span>
+          <button
+            className={styles.button}
+            onClick={() => window.location.reload()}
+          >
+            Play again
+          </button>
+        </>
+      ) : (
+        view.status === "won" && (
+          <RewardLine view={view} reward={reward} busy={busy} onClaim={onClaim} />
+        )
       )}
     </div>
   );
