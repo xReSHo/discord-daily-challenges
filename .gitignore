@@ -17,8 +17,9 @@ next-env.d.ts
 # testing / coverage
 /coverage
 
-# full-res source art — only the optimised public/boss/* is committed
+# full-res source art — only the optimised public/boss/* + public/geodash/* is committed
 /boss_images/
+/geometry_images/
 
 # misc
 .DS_Store
