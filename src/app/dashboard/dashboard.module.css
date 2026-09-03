@@ -72,6 +72,22 @@
   flex-shrink: 0;
 }
 
+.streak {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--gold-bright);
+  transition: color 0.2s var(--ease);
+}
+
+.streak:hover {
+  color: var(--ink);
+}
+
+.streak svg {
+  color: var(--bad-bright);
+}
+
 .grid {
   display: grid;
   gap: 16px;

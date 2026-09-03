@@ -1,10 +1,16 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import {
   ShieldAlert,
   Coins,
   CircleCheck,
   TriangleAlert,
   MessageSquare,
+  ShoppingBag,
+  Swords,
+  Triangle,
+  XCircle,
+  Bot,
 } from "lucide-react";
 import { auth } from "@/auth";
 import { isAdmin } from "@/lib/admin";
@@ -104,6 +110,10 @@ export default async function AdminPage({
             <span className="mono">{getChallengeDateString()}</span>
             <span className={styles.sep} />
             <span>completions &amp; flagged attempts</span>
+            <span className={styles.sep} />
+            <Link href="/admin/boss" className={styles.bossLink}>
+              <Swords size={13} /> Boss control
+            </Link>
           </p>
         </header>
 
@@ -144,6 +154,29 @@ export default async function AdminPage({
             label="Feedback (undelivered)"
             value={data.feedbackUndelivered}
             tone={data.feedbackUndelivered > 0 ? "warn" : undefined}
+          />
+          <Tile
+            icon={<ShoppingBag size={18} />}
+            label="Purchases (refunded/stuck)"
+            value={data.purchasesUnfulfilled}
+            tone={data.purchasesUnfulfilled > 0 ? "warn" : undefined}
+          />
+          <Tile
+            icon={<XCircle size={18} />}
+            label="Challenge fails today"
+            value={data.failuresToday}
+          />
+          <Tile
+            icon={<Triangle size={18} />}
+            label="GeoDash to review"
+            value={data.geoReviewCount}
+            tone={data.geoReviewCount > 0 ? "bad" : undefined}
+          />
+          <Tile
+            icon={<Bot size={18} />}
+            label="Assistant fails (7 days)"
+            value={data.chatIncidents7d}
+            tone={data.chatIncidents7d > 0 ? "warn" : undefined}
           />
         </section>
 
@@ -198,8 +231,16 @@ export default async function AdminPage({
                   {data.recentFlags.map((f) => (
                     <tr key={f.id}>
                       <td className="mono">{when(f.createdAt)}</td>
-                      <td className="mono" title={f.discordId}>
-                        {shortId(f.discordId)}
+                      <td>
+                        <div className={styles.userCell}>
+                          <span>{f.name ?? "Unknown"}</span>
+                          <span
+                            className={`mono ${styles.userId}`}
+                            title={f.discordId}
+                          >
+                            {shortId(f.discordId)}
+                          </span>
+                        </div>
                       </td>
                       <td>{sectionLabel(f.section)}</td>
                       <td className={styles.warn}>{f.reason}</td>
@@ -238,8 +279,16 @@ export default async function AdminPage({
                   {data.recentFeedback.map((f) => (
                     <tr key={f.id}>
                       <td className="mono">{when(f.createdAt)}</td>
-                      <td className="mono" title={f.discordId}>
-                        {shortId(f.discordId)}
+                      <td>
+                        <div className={styles.userCell}>
+                          <span>{f.name ?? "Unknown"}</span>
+                          <span
+                            className={`mono ${styles.userId}`}
+                            title={f.discordId}
+                          >
+                            {shortId(f.discordId)}
+                          </span>
+                        </div>
                       </td>
                       <td>{f.kind === "bug" ? "🐛 bug" : "💡 idea"}</td>
                       <td className="mono">{f.path}</td>
@@ -248,6 +297,229 @@ export default async function AdminPage({
                       </td>
                       <td className={f.delivered ? styles.ok : styles.warn}>
                         {f.delivered ? "yes" : "queued"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        <section className={styles.block}>
+          <h2 className={styles.blockTitle}>
+            Assistant incidents{" "}
+            <span className={styles.count}>
+              ({data.recentChatIncidents.length})
+            </span>
+          </h2>
+          {data.recentChatIncidents.length === 0 ? (
+            <p className={styles.empty}>
+              No assistant failures — the chatbot has been reaching its model fine.
+            </p>
+          ) : (
+            <div className={styles.tableWrap}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>When</th>
+                    <th>User</th>
+                    <th>Reason</th>
+                    <th>Detail</th>
+                    <th>Owner DM&apos;d</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.recentChatIncidents.map((c) => (
+                    <tr key={c.id}>
+                      <td className="mono">{when(c.createdAt)}</td>
+                      <td>
+                        <div className={styles.userCell}>
+                          <span>{c.name ?? "Unknown"}</span>
+                          <span
+                            className={`mono ${styles.userId}`}
+                            title={c.discordId}
+                          >
+                            {shortId(c.discordId)}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="mono">{c.reason}</td>
+                      <td
+                        className={styles.detail}
+                        style={{ whiteSpace: "normal" }}
+                      >
+                        {c.detail ?? "—"}
+                      </td>
+                      <td className={c.notified ? styles.ok : styles.warn}>
+                        {c.notified ? "yes" : "throttled"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        <section className={styles.block}>
+          <h2 className={styles.blockTitle}>
+            Shop purchases{" "}
+            <span className={styles.count}>({data.recentPurchases.length})</span>
+          </h2>
+          {data.recentPurchases.length === 0 ? (
+            <p className={styles.empty}>No shop purchases yet.</p>
+          ) : (
+            <div className={styles.tableWrap}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>When</th>
+                    <th>User</th>
+                    <th>Item</th>
+                    <th className={styles.num}>Price</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.recentPurchases.map((p) => (
+                    <tr key={p.id}>
+                      <td className="mono">{when(p.createdAt)}</td>
+                      <td>
+                        <div className={styles.userCell}>
+                          <span>{p.name ?? "Unknown"}</span>
+                          <span
+                            className={`mono ${styles.userId}`}
+                            title={p.discordId}
+                          >
+                            {shortId(p.discordId)}
+                          </span>
+                        </div>
+                      </td>
+                      <td>{p.itemName}</td>
+                      <td className={`mono ${styles.num}`}>
+                        {p.price.toLocaleString()}
+                      </td>
+                      <td
+                        className={
+                          p.status === "fulfilled"
+                            ? styles.ok
+                            : p.status === "refunded" || p.status === "failed"
+                              ? styles.bad
+                              : styles.warn
+                        }
+                      >
+                        {p.status}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        <section className={styles.block}>
+          <h2 className={styles.blockTitle}>
+            Failed challenges{" "}
+            <span className={styles.count}>({data.recentFailures.length})</span>
+          </h2>
+          {data.recentFailures.length === 0 ? (
+            <p className={styles.empty}>No failed challenges.</p>
+          ) : (
+            <div className={styles.tableWrap}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>When</th>
+                    <th>User</th>
+                    <th>Section</th>
+                    <th className={styles.num}>Fails</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.recentFailures.map((f) => (
+                    <tr key={f.id}>
+                      <td className="mono">{when(f.updatedAt)}</td>
+                      <td>
+                        <div className={styles.userCell}>
+                          <span>{f.name ?? "Unknown"}</span>
+                          <span
+                            className={`mono ${styles.userId}`}
+                            title={f.discordId}
+                          >
+                            {shortId(f.discordId)}
+                          </span>
+                        </div>
+                      </td>
+                      <td>{sectionLabel(f.section)}</td>
+                      <td className={`mono ${styles.num}`}>{f.fails}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        <section className={styles.block}>
+          <h2 className={styles.blockTitle}>
+            Geometry Dash runs{" "}
+            <span className={styles.count}>({data.recentGeoRuns.length})</span>
+          </h2>
+          {data.recentGeoRuns.length === 0 ? (
+            <p className={styles.empty}>No staked runs yet.</p>
+          ) : (
+            <div className={styles.tableWrap}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>When</th>
+                    <th>User</th>
+                    <th>Difficulty</th>
+                    <th className={styles.num}>Stake</th>
+                    <th className={styles.num}>Fees</th>
+                    <th className={styles.num}>Deaths</th>
+                    <th className={styles.num}>Payout</th>
+                    <th>Result</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.recentGeoRuns.map((g) => (
+                    <tr key={g.id}>
+                      <td className="mono">{when(g.resolvedAt ?? g.createdAt)}</td>
+                      <td>
+                        <div className={styles.userCell}>
+                          <span>{g.name ?? "Unknown"}</span>
+                          <span
+                            className={`mono ${styles.userId}`}
+                            title={g.discordId}
+                          >
+                            {shortId(g.discordId)}
+                          </span>
+                        </div>
+                      </td>
+                      <td>{g.difficulty}</td>
+                      <td className={`mono ${styles.num}`}>
+                        {g.stake.toLocaleString()}
+                      </td>
+                      <td className={`mono ${styles.num}`}>{g.feesPaid}</td>
+                      <td className={`mono ${styles.num}`}>{g.deaths}</td>
+                      <td className={`mono ${styles.num}`}>
+                        {g.payout ? g.payout.toLocaleString() : "—"}
+                      </td>
+                      <td
+                        className={
+                          g.status === "won"
+                            ? styles.ok
+                            : g.status === "rejected"
+                              ? styles.bad
+                              : styles.warn
+                        }
+                      >
+                        {g.status === "spent" || g.status === "lost"
+                          ? `out @ ${Math.round(g.distancePct)}%`
+                          : g.status}
                       </td>
                     </tr>
                   ))}

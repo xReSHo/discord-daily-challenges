@@ -1,8 +1,9 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
-import { Grid3x3, Keyboard, Crosshair } from "lucide-react";
+import { Grid3x3, Keyboard, Crosshair, Orbit } from "lucide-react";
 import { doSignIn } from "./actions";
 import { Sigil } from "@/components/Sigil";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { getChallengeDateString } from "@/lib/challenge-date";
 import styles from "./page.module.css";
 
@@ -10,6 +11,7 @@ const TRIALS = [
   { icon: Grid3x3, name: "Wordle", line: "Six guesses. One word for all." },
   { icon: Keyboard, name: "Typing Test", line: "Speed and precision, timed." },
   { icon: Crosshair, name: "Aim Trainer", line: "Twenty marks. Beat the clock." },
+  { icon: Orbit, name: "The Litany", line: "Recite the rite from memory." },
 ];
 
 function DiscordMark() {
@@ -26,6 +28,7 @@ export default async function Home() {
 
   return (
     <main className={styles.landing}>
+      <ThemeToggle className="theme-toggle--corner" />
       <div className={`container ${styles.inner}`}>
         <section className={`${styles.hero} stagger`}>
           <Sigil size={64} className={styles.sigil} />

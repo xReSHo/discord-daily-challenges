@@ -37,17 +37,25 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0a0908",
-  colorScheme: "dark",
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: "#0a0908" },
+    { media: "(prefers-color-scheme: light)", color: "#f2ebdc" },
+  ],
+  colorScheme: "dark light",
 };
+
+/** Applied before paint so the saved theme never flashes. Default: dark. */
+const THEME_INIT = `try{var t=localStorage.getItem('theme');document.documentElement.setAttribute('data-theme',t==='light'?'light':'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}`;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${display.variable} ${serif.variable} ${sans.variable} ${mono.variable}`}
     >
       <body>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT }} />
         <Atmosphere />
         {children}
       </body>

@@ -1,11 +1,11 @@
 /**
  * The registry of daily challenge sections.
  *
- * `wordle` (P3), `typing` (P4) and `aim` (P5) are the live games. Each has
- * its own page (`href`).
+ * `wordle` (P3), `typing` (P4), `aim` (P5), plus `litany` (sequence-memory) are
+ * the live games. Each has its own page (`href`).
  */
 
-export type SectionId = "wordle" | "typing" | "aim";
+export type SectionId = "wordle" | "typing" | "aim" | "litany" | "geodash";
 
 export type SectionConfig = {
   id: SectionId;
@@ -39,6 +39,20 @@ export const SECTIONS: Record<SectionId, SectionConfig> = {
     label: "Aim Trainer",
     href: "/aim",
     reward: rewardFromEnv("AIM_REWARD_AMOUNT", 200),
+  },
+  litany: {
+    id: "litany",
+    label: "The Litany",
+    href: "/litany",
+    reward: rewardFromEnv("LITANY_REWARD_AMOUNT", 200),
+  },
+  geodash: {
+    id: "geodash",
+    label: "Geometry Dash",
+    href: "/geodash",
+    // Nominal only — geodash is a staked game that computes its own payout.
+    // This is the base entry cost, shown on the dashboard card.
+    reward: rewardFromEnv("GEODASH_ENTRY", 100),
   },
 };
 

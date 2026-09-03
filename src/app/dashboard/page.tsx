@@ -8,20 +8,24 @@ import {
   Flame,
   Grid3x3,
   Keyboard,
+  Orbit,
   ShieldCheck,
   Swords,
+  Triangle,
+  XCircle,
   type LucideIcon,
 } from "lucide-react";
 import { getCompletedSectionsToday } from "@/lib/completions";
+import { getFailedSectionsToday } from "@/lib/attempts";
 import { getChallengeDateString } from "@/lib/challenge-date";
+import { getUserStreak } from "@/lib/streak";
 import { SECTION_IDS, SECTIONS, type SectionId } from "@/lib/sections";
-import { getBossWindow } from "@/lib/boss/window";
-import { BOSS_NAME } from "@/lib/boss/config";
+import { getBossState } from "@/lib/boss/game";
 import { AppFrame } from "@/components/AppFrame";
 import styles from "./dashboard.module.css";
 
-function bossTimeLeft(expiresAt: Date): string {
-  const s = Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000));
+function bossTimeLeft(expiresAt: string): string {
+  const s = Math.max(0, Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000));
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
@@ -43,6 +47,14 @@ const META: Record<
     icon: Crosshair,
     blurb: "Strike all twenty marks before the timer burns down to nothing.",
   },
+  litany: {
+    icon: Orbit,
+    blurb: "Recite the rite from memory. Each round adds a glyph; one slip breaks it.",
+  },
+  geodash: {
+    icon: Triangle,
+    blurb: "Pay to run the gauntlet. Pick a difficulty, hold the jump — clear it or lose the stake.",
+  },
 };
 
 export default async function Dashboard() {
@@ -50,12 +62,16 @@ export default async function Dashboard() {
   if (!session?.user) redirect("/");
 
   const discordId = session.user.discordId;
-  const completed = discordId
-    ? await getCompletedSectionsToday(discordId)
-    : new Set<SectionId>();
+  const [completed, failedSections] = discordId
+    ? await Promise.all([
+        getCompletedSectionsToday(discordId),
+        getFailedSectionsToday(discordId),
+      ])
+    : [new Set<SectionId>(), new Set<SectionId>()];
 
   const doneCount = SECTION_IDS.filter((id) => completed.has(id)).length;
-  const boss = getBossWindow();
+  const streak = discordId ? await getUserStreak(discordId) : null;
+  const boss = await getBossState(discordId);
 
   return (
     <AppFrame>
@@ -64,7 +80,8 @@ export default async function Dashboard() {
           <Link href="/boss" className={`panel panel--lit ${styles.bossBanner} rise`}>
             <Swords size={22} strokeWidth={1.5} className={styles.bossIcon} />
             <span className={styles.bossText}>
-              <strong>{BOSS_NAME}</strong> stirs — the weekly raid is live
+              <strong>{boss.name}</strong> stirs —{" "}
+              {boss.adminOnly ? "test raid (admins only)" : "the weekly raid is live"}
             </span>
             <span className={styles.bossMeta}>
               {bossTimeLeft(boss.expiresAt)} left
@@ -83,7 +100,14 @@ export default async function Dashboard() {
               {doneCount} of {SECTION_IDS.length} bested
             </span>
             <span className={styles.sep} />
-            <span>resets at midnight</span>
+            {streak && streak.current > 0 ? (
+              <Link href="/me" className={styles.streak}>
+                <Flame size={13} strokeWidth={2} />
+                {streak.current}-day streak
+              </Link>
+            ) : (
+              <span>resets at midnight</span>
+            )}
           </p>
         </header>
 
@@ -92,6 +116,7 @@ export default async function Dashboard() {
             const section = SECTIONS[id];
             const meta = META[id];
             const done = completed.has(id);
+            const failed = !done && failedSections.has(id);
 
             return (
               <Link
@@ -105,9 +130,17 @@ export default async function Dashboard() {
                     strokeWidth={1.4}
                     className={styles.cardIcon}
                   />
-                  <span className={`stamp ${done ? "stamp--done" : "stamp--open"}`}>
-                    {done ? <ShieldCheck /> : <Flame />}
-                    {done ? "Bested" : "Open"}
+                  <span
+                    className={`stamp ${
+                      done
+                        ? "stamp--done"
+                        : failed
+                          ? "stamp--failed"
+                          : "stamp--open"
+                    }`}
+                  >
+                    {done ? <ShieldCheck /> : failed ? <XCircle /> : <Flame />}
+                    {done ? "Bested" : failed ? "Failed" : "Open"}
                   </span>
                 </div>
 
@@ -117,10 +150,10 @@ export default async function Dashboard() {
                 <div className={styles.cardFoot}>
                   <span className="rune">
                     <Coins />
-                    {section.reward}
+                    {id === "geodash" ? `${section.reward}+ stake` : section.reward}
                   </span>
                   <span className={styles.enter}>
-                    {done ? "Review" : "Enter"}
+                    {done ? "Review" : failed ? "See" : "Enter"}
                     <ArrowRight size={14} />
                   </span>
                 </div>

@@ -1,10 +1,15 @@
 import Link from "next/link";
-import { ArrowLeft, LogOut, ShieldAlert } from "lucide-react";
+import { ArrowLeft, LogOut, ShieldAlert, Store, Trophy } from "lucide-react";
 import { auth } from "@/auth";
 import { isAdmin } from "@/lib/admin";
+import { isDevMode } from "@/lib/dev-mode";
+import { getBalance } from "@/lib/unbelievaboat";
 import { doSignOut } from "@/app/actions";
 import { Sigil } from "./Sigil";
-import { FeedbackWidget } from "./FeedbackWidget";
+import { BalancePill } from "./BalancePill";
+import { ChatWidget } from "./ChatWidget";
+import { DevModeToggle } from "./DevModeToggle";
+import { ThemeToggle } from "./ThemeToggle";
 import styles from "./AppFrame.module.css";
 
 /** Shared shell for the authed pages: header, centered content, footer. */
@@ -18,18 +23,44 @@ export async function AppFrame({
   const session = await auth();
   const user = session?.user;
   const showAdmin = isAdmin(user?.discordId);
+  const devOn = showAdmin && (await isDevMode(user?.discordId));
+  const balance = user?.discordId ? await getBalance(user.discordId) : null;
 
   return (
     <>
       <header className={styles.header}>
-        <div className={`container ${styles.headerInner}`}>
+        <div className={styles.headerInner}>
           <Link href="/dashboard" className={styles.brand}>
             <Sigil size={26} className={styles.brandMark} />
             <span className="display">Daily Challenges</span>
           </Link>
 
           <div className={styles.headerRight}>
-            {user?.discordId && <FeedbackWidget />}
+            <ThemeToggle />
+            {balance && (
+              <BalancePill
+                cash={balance.cash}
+                bank={balance.bank}
+                total={balance.total}
+              />
+            )}
+            {user?.discordId && (
+              <Link href="/shop" className={styles.adminLink} title="Shop">
+                <Store size={15} />
+                <span className={styles.logoutLabel}>Shop</span>
+              </Link>
+            )}
+            {user?.discordId && (
+              <Link
+                href="/leaderboard"
+                className={styles.adminLink}
+                title="Streak leaderboard"
+              >
+                <Trophy size={15} />
+                <span className={styles.logoutLabel}>Ranks</span>
+              </Link>
+            )}
+            {showAdmin && <DevModeToggle on={devOn} />}
             {showAdmin && (
               <Link href="/admin" className={styles.adminLink} title="Admin">
                 <ShieldAlert size={15} />
@@ -37,13 +68,13 @@ export async function AppFrame({
               </Link>
             )}
             {user?.name && (
-              <span className={styles.who}>
+              <Link href="/me" className={styles.who} title="Your record">
                 {user.image && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={user.image} alt="" className={styles.avatar} />
                 )}
                 <span className={styles.whoName}>{user.name}</span>
-              </span>
+              </Link>
             )}
             <form action={doSignOut}>
               <button type="submit" className="btn btn--sm btn--quiet">
@@ -72,6 +103,8 @@ export async function AppFrame({
           <span className="mono">{new Date().getUTCFullYear()}</span>
         </div>
       </footer>
+
+      {user?.discordId && <ChatWidget />}
     </>
   );
 }

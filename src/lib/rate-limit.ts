@@ -16,6 +16,7 @@
 
 import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
+import { isDevMode } from "@/lib/dev-mode";
 import { logger } from "@/lib/logger";
 
 export type RateRule = {
@@ -50,6 +51,8 @@ export const RATE_RULES = {
   mutate: ruleFromEnv("RATE_LIMIT_MUTATE", 20),
   /** Starting a fresh timed round. */
   start: ruleFromEnv("RATE_LIMIT_START", 12),
+  /** Assistant chat turns — each one is a model call, so keep it modest. */
+  chat: ruleFromEnv("RATE_LIMIT_CHAT", 15),
   /** The NextAuth endpoints (sign in / callback / session). */
   auth: ruleFromEnv("RATE_LIMIT_AUTH", 20),
   /** Boss arena — very chatty; the real abuse cap is the server CPS clamp,
@@ -144,6 +147,10 @@ export async function checkLimit(
   rule: RateRule,
   identifier?: string | null,
 ): Promise<RateResult> {
+  // Admins with dev mode on aren't rate limited — rapid replay is the point.
+  if (typeof identifier === "string" && (await isDevMode(identifier))) {
+    return { ok: true, retryAfterSec: 0 };
+  }
   const key = `${scope}:${identifier ?? (await clientIp())}`;
   const result = await consume(key, rule);
   if (!result.ok) logger.warn("rate_limit.blocked", { scope });

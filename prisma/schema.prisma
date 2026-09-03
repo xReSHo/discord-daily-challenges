@@ -150,8 +150,24 @@ model SuspiciousAttempt {
 /// a single indexed read rather than a SUM over BossHit.
 model Boss {
   id          String    @id @default(cuid())
-  weekOf      DateTime  @unique @db.Date
+  /// A non-unique label — the Saturday for weekly bosses, the spawn date for
+  /// manual ones. Dedup is on `dedupeKey`.
+  weekOf      DateTime  @db.Date
+  /// "weekly:<YYYY-MM-DD>" for the recurring raid, "manual:<cuid>" for an
+  /// admin spawn. Lets the lazy weekly create stay P2002-race-safe. Always set
+  /// by the code on create; nullable only so `db push` tolerates old rows.
+  dedupeKey   String?   @unique
+  source      String    @default("weekly") // "weekly" | "manual"
+  /// Params are snapshotted at spawn so editing BossConfig later never
+  /// retro-changes a running fight or a past payout.
+  name        String    @default("Veyrath, The Hollow Sovereign")
   maxHp       Int
+  rewardPool  Int       @default(10000)
+  penalty     Int       @default(2000)
+  /// Admin-spawned test boss: only admins see or can fight it.
+  adminOnly   Boolean   @default(false)
+  /// Whether resolveBoss actually moves UnbelievaBoat coins.
+  paysOut     Boolean   @default(true)
   dealtDamage Float     @default(0)
   spawnsAt    DateTime
   expiresAt   DateTime
@@ -163,6 +179,26 @@ model Boss {
   hits        BossHit[]
 
   @@index([resolvedAt])
+  @@index([spawnsAt, expiresAt])
+}
+
+/// Singleton (`id = "singleton"`) holding the recurring boss params + weekly
+/// spawn window. Edited from /admin/boss. Absent / unset fields fall back to
+/// the env defaults in src/lib/boss/config.ts.
+model BossConfig {
+  id            String   @id @default("singleton")
+  name          String
+  maxHp         Int
+  rewardPool    Int
+  penalty       Int
+  dmgPerClick   Float
+  maxCps        Int
+  spawnDow      Int // 0 = Sunday .. 6 = Saturday
+  spawnHour     Int
+  despawnHour   Int
+  despawnMin    Int
+  weeklyEnabled Boolean  @default(true)
+  updatedAt     DateTime @updatedAt
 }
 
 /// One row per (boss, fighter). `damage` drives the bounty split; `settled`
@@ -183,6 +219,84 @@ model BossHit {
   @@index([bossId])
 }
 
+// --- Personal-best score capture (profile page + future leaderboards) ---
+
+/// One row per scored run (paid or practice). Keeps the raw metric so a
+/// personal best is just `MAX(value)` / `MIN(value)` per (discordId, section).
+model GameScore {
+  id        String   @id @default(cuid())
+  discordId String
+  section   String
+  date      DateTime @db.Date
+  /// "wpm" | "aimMs" | "litanyRound" | "geoPercent"
+  metric    String
+  value     Float
+  createdAt DateTime @default(now())
+
+  @@index([discordId, section])
+  @@index([section, metric])
+}
+
+// --- Geometry Dash: staked, one-play-per-day auto-runner ---
+
+/// One row per (user, challenge-day). Unlike the other games, geodash charges
+/// coins up front (`stake`, split `paidCash`/`paidBank` for an exact refund).
+/// A death is not terminal: the player gets up to GEODASH_MAX_RESTARTS free
+/// restarts per fee, then must pay the fee again to continue (Impossible re-picks
+/// its stake). `status`:
+///   open      — an attempt is live / restartable (fresh token)
+///   spent     — died and out of free restarts; awaiting a re-payment
+///   won       — cleared (terminal)
+///   rejected  — anti-cheat forfeit (terminal)
+///   refunded  — abandoned before any death; the day's play is NOT consumed
+model GeoRun {
+  id          String    @id @default(cuid())
+  discordId   String
+  date        DateTime  @db.Date
+  difficulty  String // easy | medium | hard | impossible
+  /// current stake — for Impossible this is updated each time the fee is re-paid
+  stake       Int
+  paidCash    Int       @default(0)
+  paidBank    Int       @default(0)
+  status      String    @default("open")
+  payout      Int       @default(0)
+  distancePct Float     @default(0)
+  /// free restarts consumed since the last fee payment (resets on re-pay / new day)
+  restarts    Int       @default(0)
+  /// total deaths this run (all fee blocks) — abandon-refund only applies at 0
+  deaths      Int       @default(0)
+  /// how many times the fee has been paid (1 = the initial entry)
+  feesPaid    Int       @default(1)
+  /// ms epoch of the currently-issued run token — drives the abandon-refund TTL.
+  tokenIat    BigInt
+  createdAt   DateTime  @default(now())
+  resolvedAt  DateTime?
+
+  @@unique([discordId, date])
+  @@index([status])
+  @@index([resolvedAt])
+}
+
+// --- Per-day attempt tracking (retry limits + failed-challenge lockout) ---
+
+/// One row per (user, section, day) once they've failed a run. `fails` counts
+/// losing attempts; `failed` means the day's challenge is locked (out of tries,
+/// or a litany gamble lost). Created lazily on the first fail — its absence
+/// means "no fails yet". See src/lib/attempts.ts.
+model DailyAttempt {
+  id        String   @id @default(cuid())
+  discordId String
+  section   String
+  date      DateTime @db.Date
+  fails     Int      @default(0)
+  failed    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([discordId, section, date])
+  @@index([date])
+}
+
 // --- Support widget: bug reports & suggestions ---
 
 /// One row per submission from the in-app feedback widget. `delivered` flips
@@ -191,7 +305,7 @@ model BossHit {
 model Feedback {
   id        String   @id @default(cuid())
   discordId String
-  kind      String   // "bug" | "idea"
+  kind      String // "bug" | "idea"
   message   String
   path      String   @default("/")
   delivered Boolean  @default(false)
@@ -199,4 +313,53 @@ model Feedback {
 
   @@index([createdAt])
   @@index([delivered])
+}
+
+// --- Website shop: buyable in-house items (see src/lib/shop/website-items.ts) ---
+
+/// One purchase of a website shop item. Coins are charged up front (cash first,
+/// then bank — `paidCash`/`paidBank` record the split so a refund is exact),
+/// then the site grants the Discord role synchronously.
+/// `status`: charging (during the buy) -> fulfilled | refunded (grant failed).
+/// For a temporary pass, `roleExpiresAt` is set; the bot's expiry sweep removes
+/// the role after it passes and flips `roleRemoved`.
+model Purchase {
+  id            String    @id @default(cuid())
+  discordId     String
+  itemId        String
+  itemName      String
+  price         Int
+  paidCash      Int       @default(0)
+  paidBank      Int       @default(0)
+  status        String    @default("charging")
+  roleId        String?
+  durationSec   Int       @default(0)
+  /// null = permanent. When set and passed, the bot removes the role.
+  roleExpiresAt DateTime?
+  roleRemoved   Boolean   @default(false)
+  error         String?
+  fulfilledAt   DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([status])
+  @@index([discordId, createdAt])
+  @@index([itemId])
+  @@index([roleExpiresAt, roleRemoved])
+}
+
+// --- Website assistant: upstream (Gemini) failures ---
+
+/// One row each time the site's chat assistant fails to get a reply from its
+/// language model. `notified` flips once the owner has been DM'd about it; the
+/// notifier throttles so an outage sends one DM, not hundreds. Surfaced on /admin.
+model ChatIncident {
+  id        String   @id @default(cuid())
+  discordId String // the user who was chatting when it failed
+  reason    String // "unconfigured" | "timeout" | "upstream" | "empty" | "error"
+  detail    String?
+  notified  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([notified])
 }

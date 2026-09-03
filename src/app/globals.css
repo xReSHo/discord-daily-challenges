@@ -12,6 +12,11 @@
   --raised: #241d13;
   --hover: #2a2116;
 
+  /* wordle tiles (dark values; overridden in the light theme) */
+  --wordle-empty: #14100b;
+  --wordle-absent: #100d09;
+  --wordle-absent-border: #201a12;
+
   /* --- lines --- */
   --line: #2e271c;
   --line-2: #423827;
@@ -54,6 +59,81 @@
   --r-lg: 3px;
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --pad: clamp(20px, 5vw, 44px);
+}
+
+/* ============================================================
+   Light theme — "aged parchment". Opt-in via the header toggle,
+   which stamps data-theme on <html> (see ThemeToggle + layout).
+   Only tokens and a few non-token surfaces are re-stated here.
+   ============================================================ */
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg: #f2ebdc;
+  --bg-2: #ebe2ce;
+  --panel: #faf5ea;
+  --panel-2: #f1e8d6;
+  --raised: #e7dcc2;
+  --hover: #ded1b2;
+
+  --line: #d7c8a6;
+  --line-2: #c4b189;
+  --line-gold: #b0894a;
+
+  --ink: #2a2214;
+  --ink-dim: #4c4029;
+  --ink-mute: #6d6047;
+  --ink-faint: #94856a;
+
+  --gold: #8a6a25;
+  --gold-bright: #7c5d1c;
+  --gold-deep: #b58f43;
+  --gold-glow: rgba(140, 108, 40, 0.18);
+
+  --ok: #5d7838;
+  --ok-bright: #486227;
+  --warn: #9a7420;
+  --bad: #b1492c;
+  --bad-bright: #963c1f;
+
+  --shadow:
+    0 1px 2px rgba(60, 46, 20, 0.12),
+    0 16px 40px -18px rgba(60, 46, 20, 0.26);
+
+  --wordle-empty: #ece3d0;
+  --wordle-absent: #ddd0b3;
+  --wordle-absent-border: #ccba94;
+}
+
+:root[data-theme="light"] body {
+  background:
+    radial-gradient(115% 70% at 50% -8%, #fdfaf2 0%, transparent 52%),
+    radial-gradient(90% 55% at 50% 112%, #efe5d1 0%, transparent 48%),
+    var(--bg);
+}
+
+:root[data-theme="light"] ::selection {
+  background: rgba(140, 108, 40, 0.24);
+  color: #2a2214;
+}
+
+:root[data-theme="light"] .atmosphere__vignette {
+  background: radial-gradient(
+    130% 100% at 50% 38%,
+    transparent 55%,
+    rgba(92, 71, 33, 0.05) 82%,
+    rgba(92, 71, 33, 0.1) 100%
+  );
+}
+
+:root[data-theme="light"] .atmosphere__grain {
+  opacity: 0.035;
+  mix-blend-mode: multiply;
+}
+
+:root[data-theme="light"] .atmosphere__embers {
+  opacity: 0.4;
 }
 
 * {
@@ -489,6 +569,12 @@ a.panel--lit:hover::before,
   border-color: var(--line-gold);
 }
 
+.stamp--failed {
+  color: var(--bad-bright);
+  border-color: color-mix(in srgb, var(--bad) 45%, transparent);
+  background: color-mix(in srgb, var(--bad) 8%, transparent);
+}
+
 .field {
   width: 100%;
   padding: 0.8em 1em;
@@ -505,6 +591,63 @@ a.panel--lit:hover::before,
   outline: none;
   border-color: var(--gold);
   box-shadow: var(--ring);
+}
+
+/* ============================================================
+   Theme toggle — a small sun / crescent-moon disc
+   ============================================================ */
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  color: var(--ink-mute);
+  background: transparent;
+  border: 1px solid var(--line-2);
+  cursor: pointer;
+  transition:
+    color 0.2s var(--ease),
+    border-color 0.2s var(--ease),
+    background 0.2s var(--ease);
+}
+
+.theme-toggle:hover,
+.theme-toggle:focus-visible {
+  color: var(--gold-bright);
+  border-color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 9%, transparent);
+}
+
+.theme-toggle svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* Show the icon that matches the *current* theme; CSS-driven so it's
+   correct before hydration and never flashes. */
+.theme-toggle .tt-sun {
+  display: none;
+}
+.theme-toggle .tt-moon {
+  display: inline-block;
+}
+:root[data-theme="light"] .theme-toggle .tt-sun {
+  display: inline-block;
+}
+:root[data-theme="light"] .theme-toggle .tt-moon {
+  display: none;
+}
+
+/* landing page places it in the top-right corner */
+.theme-toggle--corner {
+  position: fixed;
+  top: clamp(14px, 3.5vw, 26px);
+  right: clamp(14px, 3.5vw, 26px);
+  z-index: 30;
 }
 
 /* ============================================================

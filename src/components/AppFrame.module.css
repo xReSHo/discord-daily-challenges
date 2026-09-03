@@ -13,6 +13,11 @@
   justify-content: space-between;
   gap: 16px;
   height: 64px;
+  /* wider than the page container so the nav has room to breathe */
+  width: 100%;
+  max-width: 1400px;
+  margin-inline: auto;
+  padding-inline: var(--pad);
 }
 
 .brand {
@@ -40,6 +45,108 @@
   gap: 14px;
 }
 
+/* coin balance — click to reveal the cash / bank / total breakdown */
+.balanceWrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.balance {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--line-gold);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--gold) 7%, transparent);
+  color: var(--gold);
+  cursor: pointer;
+  transition: background 0.2s var(--ease), border-color 0.2s var(--ease);
+}
+
+.balance:hover,
+.balance[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--gold) 13%, transparent);
+  border-color: var(--gold);
+}
+
+.balance svg {
+  flex-shrink: 0;
+}
+
+.balanceNum {
+  font-family: var(--f-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--gold-bright);
+  font-variant-numeric: tabular-nums;
+}
+
+.balanceMenu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 168px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  background: linear-gradient(180deg, var(--panel), var(--panel-2)), var(--bg);
+  border: 1px solid var(--line-gold);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+  z-index: 30;
+  transform-origin: top right;
+  opacity: 0;
+  transform: translateY(-6px) scale(0.97);
+  pointer-events: none;
+  transition:
+    opacity 0.16s var(--ease),
+    transform 0.16s var(--ease);
+}
+
+.balanceMenuOpen {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.balanceRow {
+  display: grid;
+  grid-template-columns: 15px 1fr auto;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 8px;
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+  color: var(--ink-mute);
+}
+
+.balanceRow svg {
+  color: var(--ink-faint);
+}
+
+.balanceRow b {
+  font-family: var(--f-mono);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-dim);
+}
+
+.balanceTotal {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.balanceTotal svg {
+  color: var(--gold);
+}
+
+.balanceTotal b {
+  color: var(--gold-bright);
+}
+
 .adminLink {
   display: inline-flex;
   align-items: center;
@@ -60,6 +167,11 @@
   display: inline-flex;
   align-items: center;
   gap: 9px;
+  transition: opacity 0.2s;
+}
+
+.who:hover {
+  opacity: 0.78;
 }
 
 .avatar {
@@ -122,5 +234,17 @@
   }
   .brand span:last-child {
     font-size: 11px;
+  }
+  .headerRight {
+    gap: 10px;
+  }
+  .balance {
+    padding: 4px 8px;
+  }
+  /* open rightward from the pill so a narrow screen doesn't clip it */
+  .balanceMenu {
+    right: auto;
+    left: 0;
+    transform-origin: top left;
   }
 }

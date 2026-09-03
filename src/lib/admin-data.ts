@@ -68,6 +68,14 @@ export async function getAdminOverview(filters: AdminFilters = {}) {
     unpaidCompletions,
     recentFeedback,
     feedbackUndelivered,
+    recentPurchases,
+    purchasesUnfulfilled,
+    recentFailures,
+    failuresToday,
+    recentGeoRunsRaw,
+    geoReviewCount,
+    recentChatIncidents,
+    chatIncidents7d,
   ] = await Promise.all([
     prisma.completion.groupBy({
       by: ["section"],
@@ -106,6 +114,29 @@ export async function getAdminOverview(filters: AdminFilters = {}) {
     prisma.completion.count({ where: { rewarded: false } }),
     prisma.feedback.findMany({ orderBy: { createdAt: "desc" }, take: RECENT_LIMIT }),
     prisma.feedback.count({ where: { delivered: false } }),
+    prisma.purchase.findMany({
+      where: userOr ? { OR: userOr } : {},
+      orderBy: { createdAt: "desc" },
+      take: RECENT_LIMIT,
+    }),
+    prisma.purchase.count({ where: { status: { in: ["charging", "refunded"] } } }),
+    prisma.dailyAttempt.findMany({
+      where: { failed: true, ...(userOr ? { OR: userOr } : {}) },
+      orderBy: { updatedAt: "desc" },
+      take: RECENT_LIMIT,
+    }),
+    prisma.dailyAttempt.count({ where: { failed: true, date: today } }),
+    prisma.geoRun.findMany({
+      where: {
+        status: { in: ["won", "lost", "rejected", "refunded"] },
+        ...(userOr ? { OR: userOr } : {}),
+      },
+      orderBy: { resolvedAt: "desc" },
+      take: RECENT_LIMIT,
+    }),
+    prisma.geoRun.count({ where: { status: "rejected", date: today } }),
+    prisma.chatIncident.findMany({ orderBy: { createdAt: "desc" }, take: RECENT_LIMIT }),
+    prisma.chatIncident.count({ where: { createdAt: { gte: weekAgo } } }),
   ]);
 
   const merged: CompletionLogEntry[] = [
@@ -131,7 +162,17 @@ export async function getAdminOverview(filters: AdminFilters = {}) {
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
     .slice(0, RECENT_LIMIT);
 
-  const namedIds = [...new Set(merged.map((e) => e.discordId))];
+  const namedIds = [
+    ...new Set([
+      ...merged.map((e) => e.discordId),
+      ...recentFlags.map((f) => f.discordId),
+      ...recentFeedback.map((f) => f.discordId),
+      ...recentPurchases.map((p) => p.discordId),
+      ...recentFailures.map((f) => f.discordId),
+      ...recentGeoRunsRaw.map((g) => g.discordId),
+      ...recentChatIncidents.map((c) => c.discordId),
+    ]),
+  ];
   const names = namedIds.length
     ? await prisma.user.findMany({
         where: { discordId: { in: namedIds } },
@@ -155,10 +196,46 @@ export async function getAdminOverview(filters: AdminFilters = {}) {
       paidOut: todayTotals._sum.rewardAmount ?? 0,
     },
     recentCompletions,
-    recentFlags,
+    recentFlags: recentFlags.map((f) => ({
+      ...f,
+      name: nameById.get(f.discordId) ?? null,
+    })),
     flags7d,
     unpaidCompletions,
-    recentFeedback,
+    recentFeedback: recentFeedback.map((f) => ({
+      ...f,
+      name: nameById.get(f.discordId) ?? null,
+    })),
     feedbackUndelivered,
+    recentPurchases: recentPurchases.map((p) => ({
+      ...p,
+      name: nameById.get(p.discordId) ?? null,
+    })),
+    purchasesUnfulfilled,
+    recentFailures: recentFailures.map((f) => ({
+      ...f,
+      name: nameById.get(f.discordId) ?? null,
+    })),
+    failuresToday,
+    recentGeoRuns: recentGeoRunsRaw.map((g) => ({
+      id: g.id,
+      discordId: g.discordId,
+      name: nameById.get(g.discordId) ?? null,
+      difficulty: g.difficulty,
+      stake: g.stake,
+      payout: g.payout,
+      distancePct: g.distancePct,
+      status: g.status,
+      deaths: g.deaths,
+      feesPaid: g.feesPaid,
+      resolvedAt: g.resolvedAt,
+      createdAt: g.createdAt,
+    })),
+    geoReviewCount,
+    recentChatIncidents: recentChatIncidents.map((c) => ({
+      ...c,
+      name: nameById.get(c.discordId) ?? null,
+    })),
+    chatIncidents7d,
   };
 }

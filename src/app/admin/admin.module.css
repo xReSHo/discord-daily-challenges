@@ -29,6 +29,18 @@
   flex-shrink: 0;
 }
 
+.bossLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--gold);
+  letter-spacing: inherit;
+}
+
+.bossLink:hover {
+  color: var(--gold-bright);
+}
+
 /* ---------- stat tiles ---------- */
 .tiles {
   display: grid;
