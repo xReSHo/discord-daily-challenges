@@ -2,7 +2,13 @@ import { auth } from "@/auth";
 import { rateLimit, RATE_RULES } from "@/lib/rate-limit";
 import { normalizeKind, submitFeedback } from "@/lib/feedback";
 
-/** POST /api/feedback  body: { kind: "bug" | "idea", message: string, path?: string } */
+/**
+ * POST /api/feedback  body: { kind: "bug" | "idea", message: string, path?: string }
+ *
+ * The website-facing report path. It is surfaced only by the chat widget's
+ * support fallback (shown when the assistant can't answer). Reports from the
+ * Discord `/report` command come in via `/api/feedback/intake` instead.
+ */
 export async function POST(request: Request) {
   const session = await auth();
   const discordId = session?.user?.discordId;
@@ -26,13 +32,16 @@ export async function POST(request: Request) {
     return Response.json({ error: "Pick a category." }, { status: 400 });
   }
 
+  const path =
+    typeof b.path === "string" && b.path.startsWith("/") ? b.path : "chat";
+
   const result = await submitFeedback({
     discordId,
     name: session?.user?.name,
     image: session?.user?.image,
     kind,
     message: b.message,
-    path: b.path,
+    path,
   });
 
   if (!result.ok) return Response.json({ error: result.error }, { status: 400 });

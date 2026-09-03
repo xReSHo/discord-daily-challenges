@@ -1,16 +1,16 @@
 /**
- * Support widget backend.
+ * Feedback backend. Two entry points:
+ *   - `/api/feedback/intake`  — the Discord bot's `/report` command (bot-authed).
+ *     The bot DMs the owner itself, so it sends `deliveredByBot: true` and the
+ *     row is stored already delivered.
+ *   - `/api/feedback`         — the website, from the chat widget's support
+ *     fallback (shown when the assistant can't answer). Delivered via webhook /
+ *     poll like the old Support widget.
  *
- * A submission is always stored (`Feedback` row, visible on /admin). Delivery
- * to the owner is then attempted two ways:
- *
- *   1. Discord webhook (`FEEDBACK_WEBHOOK_URL`) — posted with the reporter's
- *      name + avatar as the webhook identity, so in the owner's channel it
- *      reads as a message from that user. Marks the row delivered.
- *   2. Bot DM fallback — if no webhook is set (or it failed), the row stays
- *      `delivered = false`; `cogs/feedback.py` polls `/api/feedback/pending`
- *      and DMs the owner `<@discordId>` + the report, then calls
- *      `/api/feedback/delivered`.
+ * A submission is always stored (`Feedback` row, visible on /admin). When it is
+ * NOT pre-delivered by the bot:
+ *   1. Discord webhook (`FEEDBACK_WEBHOOK_URL`), if set — marks the row delivered.
+ *   2. `cogs/feedback.py` polls `/api/feedback/pending` and DMs the owner.
  */
 
 import { timingSafeEqual } from "node:crypto";
@@ -47,7 +47,10 @@ export async function submitFeedback(input: {
   image?: string | null;
   kind: FeedbackKind;
   message: unknown;
-  path: unknown;
+  path?: unknown;
+  /** The Discord bot already DM'd the owner — store the row as delivered and
+   *  skip the webhook. Set by `/api/feedback/intake`. */
+  deliveredByBot?: boolean;
 }): Promise<SubmitResult> {
   const message = String(input.message ?? "").trim();
   if (message.length < MIN_LEN) {
@@ -57,34 +60,43 @@ export async function submitFeedback(input: {
     return { ok: false, error: `Keep it under ${MAX_LEN} characters.` };
   }
   const path =
-    typeof input.path === "string" && input.path.startsWith("/")
+    typeof input.path === "string" && input.path.length > 0
       ? input.path.slice(0, 200)
-      : "/";
+      : "discord";
 
   const row = await prisma.feedback.create({
-    data: { discordId: input.discordId, kind: input.kind, message, path },
+    data: {
+      discordId: input.discordId,
+      kind: input.kind,
+      message,
+      path,
+      delivered: Boolean(input.deliveredByBot),
+    },
   });
 
-  const delivered = await deliverViaWebhook({
-    id: row.id,
-    discordId: input.discordId,
-    name: input.name ?? "A challenger",
-    image: input.image ?? null,
-    kind: input.kind,
-    message,
-    path,
-  });
-
-  if (delivered) {
-    await prisma.feedback
-      .update({ where: { id: row.id }, data: { delivered: true } })
-      .catch(() => {});
+  let delivered = Boolean(input.deliveredByBot);
+  if (!delivered) {
+    delivered = await deliverViaWebhook({
+      id: row.id,
+      discordId: input.discordId,
+      name: input.name ?? "A challenger",
+      image: input.image ?? null,
+      kind: input.kind,
+      message,
+      path,
+    });
+    if (delivered) {
+      await prisma.feedback
+        .update({ where: { id: row.id }, data: { delivered: true } })
+        .catch(() => {});
+    }
   }
 
   logger.info("feedback.submitted", {
     kind: input.kind,
     path,
     delivered,
+    viaBot: Boolean(input.deliveredByBot),
     discordId: input.discordId,
   });
   return { ok: true, delivered };
