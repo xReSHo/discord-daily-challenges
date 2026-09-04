@@ -5,8 +5,10 @@ import { getChallengeDateString } from "@/lib/challenge-date";
 import { getCompletedSectionsToday } from "@/lib/completions";
 import { getAttempt } from "@/lib/attempts";
 import { prizeFor } from "@/lib/typing/game";
+import { getSectionStatus } from "@/lib/section-status";
 import { AppFrame } from "@/components/AppFrame";
 import { GameHeader } from "@/components/GameHeader";
+import { SectionClosed } from "@/components/SectionClosed";
 import { TypingTest } from "./TypingTest";
 
 export const dynamic = "force-dynamic";
@@ -16,9 +18,10 @@ export default async function TypingPage() {
   const discordId = session?.user?.discordId;
   if (!discordId) redirect("/");
 
-  const [completed, attempt] = await Promise.all([
+  const [completed, attempt, status] = await Promise.all([
     getCompletedSectionsToday(discordId),
     getAttempt(discordId, "typing"),
+    getSectionStatus("typing"),
   ]);
 
   return (
@@ -31,12 +34,16 @@ export default async function TypingPage() {
           date={getChallengeDateString()}
         />
         <div className="game-stage">
-          <TypingTest
-            completedToday={completed.has("typing")}
-            failedToday={attempt.failed}
-            prize={prizeFor(attempt.fails)}
-            basePrize={prizeFor(0)}
-          />
+          {status.disabled ? (
+            <SectionClosed title="Typing Test" note={status.note} />
+          ) : (
+            <TypingTest
+              completedToday={completed.has("typing")}
+              failedToday={attempt.failed}
+              prize={prizeFor(attempt.fails)}
+              basePrize={prizeFor(0)}
+            />
+          )}
         </div>
       </div>
     </AppFrame>

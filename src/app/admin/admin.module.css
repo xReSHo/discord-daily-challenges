@@ -1,5 +1,5 @@
 .head {
-  padding-block: 4px 32px;
+  padding-block: 4px 24px;
 }
 
 .title {
@@ -10,13 +10,13 @@
 }
 
 .meta {
-  margin-top: 18px;
+  margin-top: 16px;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   flex-wrap: wrap;
   font-size: 11px;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--ink-mute);
 }
@@ -41,63 +41,197 @@
   color: var(--gold-bright);
 }
 
-/* ---------- stat tiles ---------- */
-.tiles {
-  display: grid;
-  gap: 14px;
-  grid-template-columns: repeat(2, 1fr);
-  margin-bottom: 40px;
+/* ---------- needs-attention band ---------- */
+.attention {
+  margin-bottom: 16px;
 }
 
-@media (min-width: 780px) {
-  .tiles {
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  }
-}
-
-.tile {
-  display: flex;
-  flex-direction: column;
+.allClear {
+  display: inline-flex;
+  align-items: center;
   gap: 8px;
-  padding: 20px;
+  padding: 12px 16px;
+  font-size: 13px;
+  color: var(--ok-bright);
+  border: 1px solid color-mix(in srgb, var(--ok) 35%, transparent);
+  background: color-mix(in srgb, var(--ok) 7%, transparent);
+  border-radius: var(--r);
 }
 
-.tileIcon {
-  color: var(--gold);
+.alertRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
-.tileValue {
+.alert {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 9px 13px;
+  border-radius: var(--r);
+  border: 1px solid var(--line-2);
+}
+
+.alertWarn {
+  border-color: color-mix(in srgb, var(--warn) 45%, transparent);
+  background: color-mix(in srgb, var(--warn) 8%, transparent);
+}
+
+.alertBad {
+  border-color: color-mix(in srgb, var(--bad) 45%, transparent);
+  background: color-mix(in srgb, var(--bad) 8%, transparent);
+}
+
+.alertNum {
   font-family: var(--f-mono);
   font-variant-numeric: tabular-nums;
-  font-size: 1.9rem;
-  color: var(--ink);
+  font-size: 1.1rem;
+  font-weight: 700;
   line-height: 1;
 }
 
-.tileLabel {
-  font-size: 10.5px;
+.alertWarn .alertNum {
+  color: var(--warn);
+}
+
+.alertBad .alertNum {
+  color: var(--bad-bright);
+}
+
+.alertLabel {
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--ink-mute);
 }
 
-/* ---------- blocks + tables ---------- */
+/* ---------- today mini-stats ---------- */
+.todayRow {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 32px;
+}
+
+@media (min-width: 720px) {
+  .todayRow {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
+}
+
+.miniStat {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 14px 16px;
+}
+
+.miniIcon {
+  color: var(--gold);
+}
+
+.miniValue {
+  font-family: var(--f-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.miniLabel {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+/* ---------- tabs ---------- */
+.tabs {
+  margin-bottom: 40px;
+}
+
+.tabBar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px 0;
+  margin-bottom: 20px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--ink-mute);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.tab:hover {
+  color: var(--ink-dim);
+}
+
+.tabOn {
+  color: var(--gold-bright);
+  background: color-mix(in srgb, var(--gold) 8%, transparent);
+  border-color: var(--line-gold);
+}
+
+.tabBadge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
+  font-family: var(--f-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: #1a1409;
+  background: var(--warn);
+  border-radius: 999px;
+}
+
+.tabPanel {
+  animation: fadeIn 0.18s var(--ease) both;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ---------- blocks / panels ---------- */
 .block {
-  margin-bottom: 44px;
+  margin-bottom: 34px;
 }
 
 .blockTitle {
-  font-size: 1.15rem;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
+  font-size: 1.05rem;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
   border-bottom: 1px solid var(--line);
 }
 
 .count {
   color: var(--ink-faint);
   font-family: var(--f-mono);
-  font-size: 0.85rem;
+  font-size: 0.8rem;
 }
 
 .empty {
@@ -105,8 +239,21 @@
   color: var(--ink-mute);
 }
 
+.panelNote {
+  margin: 0 0 14px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--ink-mute);
+}
+
+.panelNote:last-child {
+  margin: 14px 0 0;
+}
+
+/* ---------- log tables ---------- */
 .tableWrap {
-  overflow-x: auto;
+  overflow: auto;
+  max-height: min(60vh, 560px);
   border: 1px solid var(--line);
   border-radius: var(--r);
 }
@@ -114,16 +261,19 @@
 .table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12.5px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
 .table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   text-align: left;
-  padding: 10px 14px;
-  font-size: 10px;
+  padding: 9px 13px;
+  font-size: 9.5px;
   font-weight: 700;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.13em;
   text-transform: uppercase;
   color: var(--ink-mute);
   background: var(--panel-2);
@@ -131,9 +281,17 @@
 }
 
 .table td {
-  padding: 9px 14px;
+  padding: 8px 13px;
   border-bottom: 1px solid var(--line);
   color: var(--ink-dim);
+}
+
+.table tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--ink-faint) 4%, transparent);
+}
+
+.table tbody tr:hover {
+  background: color-mix(in srgb, var(--gold) 6%, transparent);
 }
 
 .table tr:last-child td {
@@ -145,20 +303,55 @@
   font-variant-numeric: tabular-nums;
 }
 
+.timeCell {
+  color: var(--ink-mute);
+  font-variant-numeric: tabular-nums;
+}
+
 .detail {
-  max-width: 30ch;
+  max-width: 34ch;
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--ink-mute);
 }
 
+/* ---------- status pills ---------- */
+.pill {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  white-space: nowrap;
+}
+
+.pillOk {
+  color: var(--ok-bright);
+  border-color: color-mix(in srgb, var(--ok) 40%, transparent);
+  background: color-mix(in srgb, var(--ok) 8%, transparent);
+}
+
+.pillWarn {
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 40%, transparent);
+  background: color-mix(in srgb, var(--warn) 8%, transparent);
+}
+
+.pillBad {
+  color: var(--bad-bright);
+  border-color: color-mix(in srgb, var(--bad) 45%, transparent);
+  background: color-mix(in srgb, var(--bad) 8%, transparent);
+}
+
+/* shared tone helpers (icons, mini-stats, negative numbers) */
 .ok {
   color: var(--ok-bright);
 }
 
 .bad {
   color: var(--bad-bright);
-  font-weight: 600;
 }
 
 .warn {
@@ -173,17 +366,17 @@
 }
 
 .userId {
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--ink-faint);
 }
 
-/* ---------- recent-completions filter bar ---------- */
+/* ---------- filter bar (Activity tab) ---------- */
 .filterBar {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 .filterInput {
@@ -225,4 +418,73 @@
   font-size: 11.5px;
   color: var(--ink-mute);
   text-decoration: underline;
+}
+
+/* ---------- game kill-switch (Controls tab) ---------- */
+.gameList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gameRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--panel);
+}
+
+.gameRowOff {
+  border-color: color-mix(in srgb, var(--bad) 40%, transparent);
+  background: color-mix(in srgb, var(--bad) 6%, transparent);
+}
+
+.gameName {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 130px;
+  font-weight: 600;
+  color: var(--ink-dim);
+}
+
+.gameState {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+.gameNote {
+  flex: 1;
+  min-width: 160px;
+}
+
+.gameBtn {
+  padding: 0.5em 1em;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border-radius: var(--r);
+  border: 1px solid var(--line-2);
+  background: var(--bg-2);
+  color: var(--ink-dim);
+  cursor: pointer;
+}
+
+.gameBtn:hover {
+  border-color: var(--line-gold);
+  color: var(--gold-bright);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tabPanel {
+    animation: none;
+  }
 }

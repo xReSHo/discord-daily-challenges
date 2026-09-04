@@ -8,6 +8,7 @@ import {
   Flame,
   Grid3x3,
   Keyboard,
+  Lock,
   Orbit,
   ShieldCheck,
   Swords,
@@ -17,6 +18,7 @@ import {
 } from "lucide-react";
 import { getCompletedSectionsToday } from "@/lib/completions";
 import { getFailedSectionsToday } from "@/lib/attempts";
+import { getDisabledSections } from "@/lib/section-status";
 import { getChallengeDateString } from "@/lib/challenge-date";
 import { getUserStreak } from "@/lib/streak";
 import { SECTION_IDS, SECTIONS, type SectionId } from "@/lib/sections";
@@ -62,12 +64,17 @@ export default async function Dashboard() {
   if (!session?.user) redirect("/");
 
   const discordId = session.user.discordId;
-  const [completed, failedSections] = discordId
+  const [completed, failedSections, disabledSections] = discordId
     ? await Promise.all([
         getCompletedSectionsToday(discordId),
         getFailedSectionsToday(discordId),
+        getDisabledSections(),
       ])
-    : [new Set<SectionId>(), new Set<SectionId>()];
+    : [
+        new Set<SectionId>(),
+        new Set<SectionId>(),
+        new Map<SectionId, string | null>(),
+      ];
 
   const doneCount = SECTION_IDS.filter((id) => completed.has(id)).length;
   const streak = discordId ? await getUserStreak(discordId) : null;
@@ -116,7 +123,8 @@ export default async function Dashboard() {
             const section = SECTIONS[id];
             const meta = META[id];
             const done = completed.has(id);
-            const failed = !done && failedSections.has(id);
+            const closed = !done && disabledSections.has(id);
+            const failed = !done && !closed && failedSections.has(id);
 
             return (
               <Link
@@ -134,13 +142,23 @@ export default async function Dashboard() {
                     className={`stamp ${
                       done
                         ? "stamp--done"
-                        : failed
-                          ? "stamp--failed"
-                          : "stamp--open"
+                        : closed
+                          ? "stamp--closed"
+                          : failed
+                            ? "stamp--failed"
+                            : "stamp--open"
                     }`}
                   >
-                    {done ? <ShieldCheck /> : failed ? <XCircle /> : <Flame />}
-                    {done ? "Bested" : failed ? "Failed" : "Open"}
+                    {done ? (
+                      <ShieldCheck />
+                    ) : closed ? (
+                      <Lock />
+                    ) : failed ? (
+                      <XCircle />
+                    ) : (
+                      <Flame />
+                    )}
+                    {done ? "Bested" : closed ? "Closed" : failed ? "Failed" : "Open"}
                   </span>
                 </div>
 
@@ -153,7 +171,7 @@ export default async function Dashboard() {
                     {id === "geodash" ? `${section.reward}+ stake` : section.reward}
                   </span>
                   <span className={styles.enter}>
-                    {done ? "Review" : failed ? "See" : "Enter"}
+                    {done ? "Review" : closed ? "Closed" : failed ? "See" : "Enter"}
                     <ArrowRight size={14} />
                   </span>
                 </div>

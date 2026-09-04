@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { submitRound } from "@/lib/aim/game";
 import { rateLimit, RATE_RULES } from "@/lib/rate-limit";
+import { sectionGuard } from "@/lib/section-status";
 
 /** POST /api/aim/submit  body: { token, hits: [{ i, x, y, t }] } */
 export async function POST(request: Request) {
@@ -12,6 +13,9 @@ export async function POST(request: Request) {
 
   const limited = await rateLimit("aim:submit", RATE_RULES.mutate, discordId);
   if (limited) return limited;
+
+  const closed = await sectionGuard("aim");
+  if (closed) return closed;
 
   let body: unknown;
   try {

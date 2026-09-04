@@ -2,15 +2,13 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import {
   ShieldAlert,
-  Coins,
   CircleCheck,
-  TriangleAlert,
-  MessageSquare,
   ShoppingBag,
   Swords,
   Triangle,
-  XCircle,
   Bot,
+  Coins,
+  Power,
 } from "lucide-react";
 import { auth } from "@/auth";
 import { isAdmin } from "@/lib/admin";
@@ -20,38 +18,24 @@ import {
   type AdminOverview,
   type AdminFilters,
 } from "@/lib/admin-data";
-import { getChallengeDateString } from "@/lib/challenge-date";
+import {
+  getChallengeDateString,
+  formatAdminTime,
+  formatAdminTimeFull,
+} from "@/lib/challenge-date";
 import { SECTIONS, isSectionId } from "@/lib/sections";
+import { getAllSectionStatuses } from "@/lib/section-status";
 import { logger } from "@/lib/logger";
+import { toggleSection } from "./section-actions";
+import { AdminTabs, type AdminTab } from "./AdminTabs";
 import styles from "./admin.module.css";
 
 // Always current — never prerender or cache an operator view.
 export const dynamic = "force-dynamic";
 
-const CHALLENGE_TZ = process.env.CHALLENGE_TZ || "Asia/Bahrain";
-
 function sectionLabel(id: string): string {
   if (id === "boss") return "Boss Raid";
   return isSectionId(id) ? SECTIONS[id].label : id;
-}
-
-/** Plain UTC timestamp — used where exact wall-clock precision matters most. */
-function when(d: Date): string {
-  return new Date(d).toISOString().replace("T", " ").slice(0, 19) + "Z";
-}
-
-/** 12-hour clock in the challenge timezone, for the Recent completions log. */
-function whenAmPm(d: Date): string {
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone: CHALLENGE_TZ,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-  }).format(new Date(d));
 }
 
 function shortId(discordId: string): string {
@@ -100,6 +84,9 @@ export default async function AdminPage({
     logger.error("admin.overview_failed", { message: loadError });
   }
 
+  const sectionStatuses = await getAllSectionStatuses().catch(() => []);
+  const gamesOffline = sectionStatuses.filter((s) => s.disabled).length;
+
   return (
     <AppFrame back={{ href: "/dashboard", label: "Back to trials" }}>
       <div className="container">
@@ -109,7 +96,7 @@ export default async function AdminPage({
           <p className={styles.meta}>
             <span className="mono">{getChallengeDateString()}</span>
             <span className={styles.sep} />
-            <span>completions &amp; flagged attempts</span>
+            <span>times in Bahrain</span>
             <span className={styles.sep} />
             <Link href="/admin/boss" className={styles.bossLink}>
               <Swords size={13} /> Boss control
@@ -120,513 +107,451 @@ export default async function AdminPage({
         {!data && (
           <p className={styles.empty}>
             Couldn&apos;t load the ledger
-            {loadError ? ` — ${loadError}` : ""}. If this is the first deploy,
-            run <code>npx prisma db push</code> to create the audit tables.
+            {loadError ? ` — ${loadError}` : ""}. If this is the first deploy, run{" "}
+            <code>npx prisma db push</code> to create the audit tables.
           </p>
         )}
+
         {data && (
-        <>
-        <section className={`${styles.tiles} stagger`}>
-          <Tile
-            icon={<CircleCheck size={18} />}
-            label="Completions today"
-            value={data.todayTotals.count}
+          <AdminBody
+            data={data}
+            filters={filters}
+            hasFilters={hasFilters}
+            sectionStatuses={sectionStatuses}
+            gamesOffline={gamesOffline}
           />
-          <Tile
-            icon={<Coins size={18} />}
-            label="Paid out today"
-            value={data.todayTotals.paidOut}
-          />
-          <Tile
-            icon={<ShieldAlert size={18} />}
-            label="Flags (7 days)"
-            value={data.flags7d}
-            tone={data.flags7d > 0 ? "warn" : undefined}
-          />
-          <Tile
-            icon={<TriangleAlert size={18} />}
-            label="Unpaid completions"
-            value={data.unpaidCompletions}
-            tone={data.unpaidCompletions > 0 ? "bad" : undefined}
-          />
-          <Tile
-            icon={<MessageSquare size={18} />}
-            label="Feedback (undelivered)"
-            value={data.feedbackUndelivered}
-            tone={data.feedbackUndelivered > 0 ? "warn" : undefined}
-          />
-          <Tile
-            icon={<ShoppingBag size={18} />}
-            label="Purchases (refunded/stuck)"
-            value={data.purchasesUnfulfilled}
-            tone={data.purchasesUnfulfilled > 0 ? "warn" : undefined}
-          />
-          <Tile
-            icon={<XCircle size={18} />}
-            label="Challenge fails today"
-            value={data.failuresToday}
-          />
-          <Tile
-            icon={<Triangle size={18} />}
-            label="GeoDash to review"
-            value={data.geoReviewCount}
-            tone={data.geoReviewCount > 0 ? "bad" : undefined}
-          />
-          <Tile
-            icon={<Bot size={18} />}
-            label="Assistant fails (7 days)"
-            value={data.chatIncidents7d}
-            tone={data.chatIncidents7d > 0 ? "warn" : undefined}
-          />
-        </section>
-
-        <section className={styles.block}>
-          <h2 className={styles.blockTitle}>Today by section</h2>
-          {data.todayBySection.length === 0 ? (
-            <p className={styles.empty}>No completions yet today.</p>
-          ) : (
-            <div className={styles.tableWrap}>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th>Section</th>
-                    <th className={styles.num}>Completions</th>
-                    <th className={styles.num}>Paid out</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.todayBySection.map((r) => (
-                    <tr key={r.section}>
-                      <td>{sectionLabel(r.section)}</td>
-                      <td className={styles.num}>{r.count}</td>
-                      <td className={styles.num}>{r.paidOut}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-
-        <section className={styles.block}>
-          <h2 className={styles.blockTitle}>
-            Flagged attempts{" "}
-            <span className={styles.count}>({data.recentFlags.length})</span>
-          </h2>
-          {data.recentFlags.length === 0 ? (
-            <p className={styles.empty}>Nothing flagged. Clean run.</p>
-          ) : (
-            <div className={styles.tableWrap}>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th>When</th>
-                    <th>User</th>
-                    <th>Section</th>
-                    <th>Reason</th>
-                    <th>Detail</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.recentFlags.map((f) => (
-                    <tr key={f.id}>
-                      <td className="mono">{when(f.createdAt)}</td>
-                      <td>
-                        <div className={styles.userCell}>
-                          <span>{f.name ?? "Unknown"}</span>
-                          <span
-                            className={`mono ${styles.userId}`}
-                            title={f.discordId}
-                          >
-                            {shortId(f.discordId)}
-                          </span>
-                        </div>
-                      </td>
-                      <td>{sectionLabel(f.section)}</td>
-                      <td className={styles.warn}>{f.reason}</td>
-                      <td className={`mono ${styles.detail}`}>
-                        {JSON.stringify(f.detail)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-
-        <section className={styles.block}>
-          <h2 className={styles.blockTitle}>
-            Feedback{" "}
-            <span className={styles.count}>({data.recentFeedback.length})</span>
-          </h2>
-          {data.recentFeedback.length === 0 ? (
-            <p className={styles.empty}>No reports or suggestions yet.</p>
-          ) : (
-            <div className={styles.tableWrap}>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th>When</th>
-                    <th>User</th>
-                    <th>Kind</th>
-                    <th>Page</th>
-                    <th>Message</th>
-                    <th>Sent</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.recentFeedback.map((f) => (
-                    <tr key={f.id}>
-                      <td className="mono">{when(f.createdAt)}</td>
-                      <td>
-                        <div className={styles.userCell}>
-                          <span>{f.name ?? "Unknown"}</span>
-                          <span
-                            className={`mono ${styles.userId}`}
-                            title={f.discordId}
-                          >
-                            {shortId(f.discordId)}
-                          </span>
-                        </div>
-                      </td>
-                      <td>{f.kind === "bug" ? "🐛 bug" : "💡 idea"}</td>
-                      <td className="mono">{f.path}</td>
-                      <td className={styles.detail} style={{ whiteSpace: "normal" }}>
-                        {f.message}
-                      </td>
-                      <td className={f.delivered ? styles.ok : styles.warn}>
-                        {f.delivered ? "yes" : "queued"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-
-        <section className={styles.block}>
-          <h2 className={styles.blockTitle}>
-            Assistant incidents{" "}
-            <span className={styles.count}>
-              ({data.recentChatIncidents.length})
-            </span>
-          </h2>
-          {data.recentChatIncidents.length === 0 ? (
-            <p className={styles.empty}>
-              No assistant failures — the chatbot has been reaching its model fine.
-            </p>
-          ) : (
-            <div className={styles.tableWrap}>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th>When</th>
-                    <th>User</th>
-                    <th>Reason</th>
-                    <th>Detail</th>
-                    <th>Owner DM&apos;d</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.recentChatIncidents.map((c) => (
-                    <tr key={c.id}>
-                      <td className="mono">{when(c.createdAt)}</td>
-                      <td>
-                        <div className={styles.userCell}>
-                          <span>{c.name ?? "Unknown"}</span>
-                          <span
-                            className={`mono ${styles.userId}`}
-                            title={c.discordId}
-                          >
-                            {shortId(c.discordId)}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="mono">{c.reason}</td>
-                      <td
-                        className={styles.detail}
-                        style={{ whiteSpace: "normal" }}
-                      >
-                        {c.detail ?? "—"}
-                      </td>
-                      <td className={c.notified ? styles.ok : styles.warn}>
-                        {c.notified ? "yes" : "throttled"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-
-        <section className={styles.block}>
-          <h2 className={styles.blockTitle}>
-            Shop purchases{" "}
-            <span className={styles.count}>({data.recentPurchases.length})</span>
-          </h2>
-          {data.recentPurchases.length === 0 ? (
-            <p className={styles.empty}>No shop purchases yet.</p>
-          ) : (
-            <div className={styles.tableWrap}>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th>When</th>
-                    <th>User</th>
-                    <th>Item</th>
-                    <th className={styles.num}>Price</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.recentPurchases.map((p) => (
-                    <tr key={p.id}>
-                      <td className="mono">{when(p.createdAt)}</td>
-                      <td>
-                        <div className={styles.userCell}>
-                          <span>{p.name ?? "Unknown"}</span>
-                          <span
-                            className={`mono ${styles.userId}`}
-                            title={p.discordId}
-                          >
-                            {shortId(p.discordId)}
-                          </span>
-                        </div>
-                      </td>
-                      <td>{p.itemName}</td>
-                      <td className={`mono ${styles.num}`}>
-                        {p.price.toLocaleString()}
-                      </td>
-                      <td
-                        className={
-                          p.status === "fulfilled"
-                            ? styles.ok
-                            : p.status === "refunded" || p.status === "failed"
-                              ? styles.bad
-                              : styles.warn
-                        }
-                      >
-                        {p.status}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-
-        <section className={styles.block}>
-          <h2 className={styles.blockTitle}>
-            Failed challenges{" "}
-            <span className={styles.count}>({data.recentFailures.length})</span>
-          </h2>
-          {data.recentFailures.length === 0 ? (
-            <p className={styles.empty}>No failed challenges.</p>
-          ) : (
-            <div className={styles.tableWrap}>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th>When</th>
-                    <th>User</th>
-                    <th>Section</th>
-                    <th className={styles.num}>Fails</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.recentFailures.map((f) => (
-                    <tr key={f.id}>
-                      <td className="mono">{when(f.updatedAt)}</td>
-                      <td>
-                        <div className={styles.userCell}>
-                          <span>{f.name ?? "Unknown"}</span>
-                          <span
-                            className={`mono ${styles.userId}`}
-                            title={f.discordId}
-                          >
-                            {shortId(f.discordId)}
-                          </span>
-                        </div>
-                      </td>
-                      <td>{sectionLabel(f.section)}</td>
-                      <td className={`mono ${styles.num}`}>{f.fails}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-
-        <section className={styles.block}>
-          <h2 className={styles.blockTitle}>
-            Geometry Dash runs{" "}
-            <span className={styles.count}>({data.recentGeoRuns.length})</span>
-          </h2>
-          {data.recentGeoRuns.length === 0 ? (
-            <p className={styles.empty}>No staked runs yet.</p>
-          ) : (
-            <div className={styles.tableWrap}>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th>When</th>
-                    <th>User</th>
-                    <th>Difficulty</th>
-                    <th className={styles.num}>Stake</th>
-                    <th className={styles.num}>Fees</th>
-                    <th className={styles.num}>Deaths</th>
-                    <th className={styles.num}>Payout</th>
-                    <th>Result</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.recentGeoRuns.map((g) => (
-                    <tr key={g.id}>
-                      <td className="mono">{when(g.resolvedAt ?? g.createdAt)}</td>
-                      <td>
-                        <div className={styles.userCell}>
-                          <span>{g.name ?? "Unknown"}</span>
-                          <span
-                            className={`mono ${styles.userId}`}
-                            title={g.discordId}
-                          >
-                            {shortId(g.discordId)}
-                          </span>
-                        </div>
-                      </td>
-                      <td>{g.difficulty}</td>
-                      <td className={`mono ${styles.num}`}>
-                        {g.stake.toLocaleString()}
-                      </td>
-                      <td className={`mono ${styles.num}`}>{g.feesPaid}</td>
-                      <td className={`mono ${styles.num}`}>{g.deaths}</td>
-                      <td className={`mono ${styles.num}`}>
-                        {g.payout ? g.payout.toLocaleString() : "—"}
-                      </td>
-                      <td
-                        className={
-                          g.status === "won"
-                            ? styles.ok
-                            : g.status === "rejected"
-                              ? styles.bad
-                              : styles.warn
-                        }
-                      >
-                        {g.status === "spent" || g.status === "lost"
-                          ? `out @ ${Math.round(g.distancePct)}%`
-                          : g.status}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-
-        <section className={styles.block}>
-          <h2 className={styles.blockTitle}>
-            Recent completions{" "}
-            <span className={styles.count}>({data.recentCompletions.length})</span>
-          </h2>
-
-          <form className={styles.filterBar} action="/admin" method="get">
-            <input
-              type="text"
-              name="q"
-              placeholder="Search user ID or name"
-              defaultValue={filters.q ?? ""}
-              className={styles.filterInput}
-            />
-            <input
-              type="date"
-              name="from"
-              defaultValue={filters.from ?? ""}
-              aria-label="From date"
-              className={styles.filterInput}
-            />
-            <span className={styles.filterToLabel}>to</span>
-            <input
-              type="date"
-              name="to"
-              defaultValue={filters.to ?? ""}
-              aria-label="To date"
-              className={styles.filterInput}
-            />
-            <button type="submit" className={styles.filterButton}>
-              Filter
-            </button>
-            {hasFilters && (
-              <a href="/admin" className={styles.filterClear}>
-                Clear
-              </a>
-            )}
-          </form>
-
-          {data.recentCompletions.length === 0 ? (
-            <p className={styles.empty}>
-              {hasFilters
-                ? "No completions match those filters."
-                : "No completions recorded yet."}
-            </p>
-          ) : (
-            <div className={styles.tableWrap}>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th>When</th>
-                    <th>User</th>
-                    <th>Section</th>
-                    <th className={styles.num}>Reward</th>
-                    <th>Paid</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.recentCompletions.map((c) => (
-                    <tr key={c.id}>
-                      <td className="mono">{whenAmPm(c.createdAt)}</td>
-                      <td>
-                        <div className={styles.userCell}>
-                          <span>{c.name ?? "Unknown"}</span>
-                          <span
-                            className={`mono ${styles.userId}`}
-                            title={c.discordId}
-                          >
-                            {shortId(c.discordId)}
-                          </span>
-                        </div>
-                      </td>
-                      <td>{sectionLabel(c.section)}</td>
-                      <td
-                        className={`mono ${styles.num} ${
-                          c.rewardAmount < 0 ? styles.bad : ""
-                        }`}
-                      >
-                        {c.rewardAmount.toLocaleString()}
-                      </td>
-                      <td className={c.rewarded ? styles.ok : styles.bad}>
-                        {c.rewarded ? "yes" : "FAILED"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-        </>
         )}
       </div>
     </AppFrame>
   );
 }
 
-function Tile({
+// ---------------------------------------------------------------------------
+
+type Tone = "warn" | "bad";
+
+function AdminBody({
+  data,
+  filters,
+  hasFilters,
+  sectionStatuses,
+  gamesOffline,
+}: {
+  data: AdminOverview;
+  filters: AdminFilters;
+  hasFilters: boolean;
+  sectionStatuses: { section: string; disabled: boolean; note: string | null }[];
+  gamesOffline: number;
+}) {
+  // Every alert routes to the tab that lets you act on it.
+  const alerts: { label: string; count: number; tab: string; tone: Tone }[] = [
+    { label: "Flags (7d)", count: data.flags7d, tab: "integrity", tone: "bad" },
+    { label: "Challenge fails today", count: data.failuresToday, tab: "integrity", tone: "warn" },
+    { label: "GeoDash to review", count: data.geoReviewCount, tab: "economy", tone: "bad" },
+    { label: "Purchases stuck", count: data.purchasesUnfulfilled, tab: "economy", tone: "warn" },
+    { label: "Unpaid completions", count: data.unpaidCompletions, tab: "activity", tone: "bad" },
+    { label: "Feedback queued", count: data.feedbackUndelivered, tab: "health", tone: "warn" },
+    { label: "Assistant fails (7d)", count: data.chatIncidents7d, tab: "health", tone: "warn" },
+    { label: "Games offline", count: gamesOffline, tab: "controls", tone: "warn" },
+  ];
+  const live = alerts.filter((a) => a.count > 0);
+  const badge = (tab: string) =>
+    alerts.filter((a) => a.tab === tab).reduce((n, a) => n + a.count, 0) || undefined;
+
+  const tabs: AdminTab[] = [
+    {
+      id: "activity",
+      label: "Activity",
+      badge: badge("activity"),
+      panel: (
+        <>
+          <Panel
+            title="Recent completions"
+            count={data.recentCompletions.length}
+            empty={
+              hasFilters
+                ? "No completions match those filters."
+                : "No completions recorded yet."
+            }
+          >
+            <form className={styles.filterBar} action="/admin" method="get">
+              <input
+                type="text"
+                name="q"
+                placeholder="Search user ID or name"
+                defaultValue={filters.q ?? ""}
+                className={styles.filterInput}
+              />
+              <input
+                type="date"
+                name="from"
+                defaultValue={filters.from ?? ""}
+                aria-label="From date"
+                className={styles.filterInput}
+              />
+              <span className={styles.filterToLabel}>to</span>
+              <input
+                type="date"
+                name="to"
+                defaultValue={filters.to ?? ""}
+                aria-label="To date"
+                className={styles.filterInput}
+              />
+              <button type="submit" className={styles.filterButton}>
+                Filter
+              </button>
+              {hasFilters && (
+                <a href="/admin" className={styles.filterClear}>
+                  Clear
+                </a>
+              )}
+            </form>
+
+            {data.recentCompletions.length > 0 && (
+              <LogTable head={["When", "User", "Section", "Reward", "Paid"]} numCols={[3]}>
+                {data.recentCompletions.map((c) => (
+                  <tr key={c.id}>
+                    <TimeCell d={c.createdAt} />
+                    <UserCell name={c.name} discordId={c.discordId} />
+                    <td>{sectionLabel(c.section)}</td>
+                    <td className={`${styles.num} mono ${c.rewardAmount < 0 ? styles.bad : ""}`}>
+                      {c.rewardAmount.toLocaleString()}
+                    </td>
+                    <td>
+                      <Pill tone={c.rewarded ? "ok" : "bad"}>
+                        {c.rewarded ? "paid" : "FAILED"}
+                      </Pill>
+                    </td>
+                  </tr>
+                ))}
+              </LogTable>
+            )}
+          </Panel>
+
+          <Panel title="Today by section" count={data.todayBySection.length} empty="No completions yet today.">
+            <LogTable head={["Section", "Completions", "Paid out"]} numCols={[1, 2]}>
+              {data.todayBySection.map((r) => (
+                <tr key={r.section}>
+                  <td>{sectionLabel(r.section)}</td>
+                  <td className={`${styles.num} mono`}>{r.count}</td>
+                  <td className={`${styles.num} mono`}>{r.paidOut.toLocaleString()}</td>
+                </tr>
+              ))}
+            </LogTable>
+          </Panel>
+        </>
+      ),
+    },
+    {
+      id: "economy",
+      label: "Economy",
+      badge: badge("economy"),
+      panel: (
+        <>
+          <Panel
+            title="Shop purchases"
+            count={data.recentPurchases.length}
+            empty="No shop purchases yet."
+          >
+            <LogTable head={["When", "User", "Item", "Price", "Status"]} numCols={[3]}>
+              {data.recentPurchases.map((p) => (
+                <tr key={p.id}>
+                  <TimeCell d={p.createdAt} />
+                  <UserCell name={p.name} discordId={p.discordId} />
+                  <td>{p.itemName}</td>
+                  <td className={`${styles.num} mono`}>{p.price.toLocaleString()}</td>
+                  <td>
+                    <Pill
+                      tone={
+                        p.status === "fulfilled"
+                          ? "ok"
+                          : p.status === "refunded" || p.status === "failed"
+                            ? "bad"
+                            : "warn"
+                      }
+                    >
+                      {p.status}
+                    </Pill>
+                  </td>
+                </tr>
+              ))}
+            </LogTable>
+          </Panel>
+
+          <Panel
+            title="Geometry Dash runs"
+            count={data.recentGeoRuns.length}
+            empty="No staked runs yet."
+          >
+            <LogTable
+              head={["When", "User", "Difficulty", "Stake", "Fees", "Deaths", "Payout", "Result"]}
+              numCols={[3, 4, 5, 6]}
+            >
+              {data.recentGeoRuns.map((g) => (
+                <tr key={g.id}>
+                  <TimeCell d={g.resolvedAt ?? g.createdAt} />
+                  <UserCell name={g.name} discordId={g.discordId} />
+                  <td>{g.difficulty}</td>
+                  <td className={`${styles.num} mono`}>{g.stake.toLocaleString()}</td>
+                  <td className={`${styles.num} mono`}>{g.feesPaid}</td>
+                  <td className={`${styles.num} mono`}>{g.deaths}</td>
+                  <td className={`${styles.num} mono`}>
+                    {g.payout ? g.payout.toLocaleString() : "—"}
+                  </td>
+                  <td>
+                    <Pill
+                      tone={
+                        g.status === "won"
+                          ? "ok"
+                          : g.status === "rejected"
+                            ? "bad"
+                            : "warn"
+                      }
+                    >
+                      {g.status === "spent" || g.status === "lost"
+                        ? `out @ ${Math.round(g.distancePct)}%`
+                        : g.status}
+                    </Pill>
+                  </td>
+                </tr>
+              ))}
+            </LogTable>
+          </Panel>
+        </>
+      ),
+    },
+    {
+      id: "integrity",
+      label: "Integrity",
+      badge: badge("integrity"),
+      panel: (
+        <>
+          <Panel
+            title="Flagged attempts"
+            count={data.recentFlags.length}
+            empty="Nothing flagged. Clean run."
+          >
+            <LogTable head={["When", "User", "Section", "Reason", "Detail"]}>
+              {data.recentFlags.map((f) => (
+                <tr key={f.id}>
+                  <TimeCell d={f.createdAt} />
+                  <UserCell name={f.name} discordId={f.discordId} />
+                  <td>{sectionLabel(f.section)}</td>
+                  <td>
+                    <Pill tone="warn">{f.reason}</Pill>
+                  </td>
+                  <td
+                    className={`mono ${styles.detail}`}
+                    title={JSON.stringify(f.detail)}
+                  >
+                    {JSON.stringify(f.detail)}
+                  </td>
+                </tr>
+              ))}
+            </LogTable>
+          </Panel>
+
+          <Panel
+            title="Failed challenges"
+            count={data.recentFailures.length}
+            empty="No failed challenges."
+          >
+            <LogTable head={["When", "User", "Section", "Fails"]} numCols={[3]}>
+              {data.recentFailures.map((f) => (
+                <tr key={f.id}>
+                  <TimeCell d={f.updatedAt} />
+                  <UserCell name={f.name} discordId={f.discordId} />
+                  <td>{sectionLabel(f.section)}</td>
+                  <td className={`${styles.num} mono`}>{f.fails}</td>
+                </tr>
+              ))}
+            </LogTable>
+          </Panel>
+        </>
+      ),
+    },
+    {
+      id: "health",
+      label: "Support & health",
+      badge: badge("health"),
+      panel: (
+        <>
+          <Panel
+            title="Feedback"
+            count={data.recentFeedback.length}
+            empty="No reports or suggestions yet."
+          >
+            <LogTable head={["When", "User", "Kind", "Page", "Message", "Sent"]}>
+              {data.recentFeedback.map((f) => (
+                <tr key={f.id}>
+                  <TimeCell d={f.createdAt} />
+                  <UserCell name={f.name} discordId={f.discordId} />
+                  <td>{f.kind === "bug" ? "🐛 bug" : "💡 idea"}</td>
+                  <td className="mono">{f.path}</td>
+                  <td className={styles.detail} title={f.message}>
+                    {f.message}
+                  </td>
+                  <td>
+                    <Pill tone={f.delivered ? "ok" : "warn"}>
+                      {f.delivered ? "sent" : "queued"}
+                    </Pill>
+                  </td>
+                </tr>
+              ))}
+            </LogTable>
+          </Panel>
+
+          <Panel
+            title="Assistant incidents"
+            count={data.recentChatIncidents.length}
+            empty="No assistant failures — the chatbot has been reaching its model fine."
+          >
+            <LogTable head={["When", "User", "Reason", "Detail", "Owner DM'd"]}>
+              {data.recentChatIncidents.map((c) => (
+                <tr key={c.id}>
+                  <TimeCell d={c.createdAt} />
+                  <UserCell name={c.name} discordId={c.discordId} />
+                  <td className="mono">{c.reason}</td>
+                  <td className={styles.detail} title={c.detail ?? ""}>
+                    {c.detail ?? "—"}
+                  </td>
+                  <td>
+                    <Pill tone={c.notified ? "ok" : "warn"}>
+                      {c.notified ? "yes" : "throttled"}
+                    </Pill>
+                  </td>
+                </tr>
+              ))}
+            </LogTable>
+          </Panel>
+        </>
+      ),
+    },
+    {
+      id: "controls",
+      label: "Controls",
+      badge: badge("controls"),
+      panel: (
+        <Panel title="Game status" count={sectionStatuses.length}>
+          <p className={styles.panelNote}>
+            Take a game offline when a critical bug is found — its page shows a
+            notice and its play/submit endpoints return an error. The note is
+            shown to players.
+          </p>
+          <div className={styles.gameList}>
+            {sectionStatuses.map((s) => (
+              <form
+                key={s.section}
+                action={toggleSection}
+                className={`${styles.gameRow} ${s.disabled ? styles.gameRowOff : ""}`}
+              >
+                <input type="hidden" name="section" value={s.section} />
+                <span className={styles.gameName}>
+                  <Power
+                    size={13}
+                    className={s.disabled ? styles.bad : styles.ok}
+                  />
+                  {sectionLabel(s.section)}
+                </span>
+                <label className={styles.gameState}>
+                  <input
+                    type="checkbox"
+                    name="disabled"
+                    defaultChecked={s.disabled}
+                  />{" "}
+                  Offline
+                </label>
+                <input
+                  type="text"
+                  name="note"
+                  defaultValue={s.note ?? ""}
+                  placeholder="Player-facing note (optional)"
+                  maxLength={300}
+                  className={`${styles.filterInput} ${styles.gameNote}`}
+                />
+                <button type="submit" className={styles.gameBtn}>
+                  Save
+                </button>
+              </form>
+            ))}
+          </div>
+          <p className={styles.panelNote}>
+            <Link href="/admin/boss" className={styles.bossLink}>
+              <Swords size={13} /> Weekly boss control &amp; schedule →
+            </Link>
+          </p>
+        </Panel>
+      ),
+    },
+  ];
+
+  return (
+    <>
+      <section className={`${styles.attention} rise`}>
+        {live.length === 0 ? (
+          <p className={styles.allClear}>
+            <CircleCheck size={16} /> All clear — nothing needs attention.
+          </p>
+        ) : (
+          <div className={styles.alertRow}>
+            {live.map((a) => (
+              <span
+                key={a.label}
+                className={`${styles.alert} ${a.tone === "bad" ? styles.alertBad : styles.alertWarn}`}
+              >
+                <span className={styles.alertNum}>{a.count.toLocaleString()}</span>
+                <span className={styles.alertLabel}>{a.label}</span>
+              </span>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className={`${styles.todayRow} stagger`}>
+        <MiniStat
+          icon={<CircleCheck size={16} />}
+          label="Completions today"
+          value={data.todayTotals.count}
+        />
+        <MiniStat
+          icon={<Coins size={16} />}
+          label="Paid out today"
+          value={data.todayTotals.paidOut}
+        />
+        <MiniStat
+          icon={<ShieldAlert size={16} />}
+          label="Flags · 7 days"
+          value={data.flags7d}
+          tone={data.flags7d > 0 ? "warn" : undefined}
+        />
+        <MiniStat
+          icon={<Triangle size={16} />}
+          label="GeoDash to review"
+          value={data.geoReviewCount}
+          tone={data.geoReviewCount > 0 ? "bad" : undefined}
+        />
+        <MiniStat
+          icon={<ShoppingBag size={16} />}
+          label="Purchases stuck"
+          value={data.purchasesUnfulfilled}
+          tone={data.purchasesUnfulfilled > 0 ? "warn" : undefined}
+        />
+        <MiniStat
+          icon={<Bot size={16} />}
+          label="Assistant fails · 7d"
+          value={data.chatIncidents7d}
+          tone={data.chatIncidents7d > 0 ? "warn" : undefined}
+        />
+      </section>
+
+      <AdminTabs tabs={tabs} />
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+function MiniStat({
   icon,
   label,
   value,
@@ -635,19 +560,115 @@ function Tile({
   icon: React.ReactNode;
   label: string;
   value: number;
-  tone?: "warn" | "bad";
+  tone?: Tone;
 }) {
   return (
-    <div className={`panel panel--lit ${styles.tile}`}>
-      <span className={styles.tileIcon}>{icon}</span>
+    <div className={`panel ${styles.miniStat}`}>
+      <span className={styles.miniIcon}>{icon}</span>
       <span
-        className={`${styles.tileValue} ${
+        className={`${styles.miniValue} ${
           tone === "warn" ? styles.warn : tone === "bad" ? styles.bad : ""
         }`}
       >
         {value.toLocaleString()}
       </span>
-      <span className={styles.tileLabel}>{label}</span>
+      <span className={styles.miniLabel}>{label}</span>
     </div>
+  );
+}
+
+function Panel({
+  title,
+  count,
+  empty,
+  children,
+}: {
+  title: string;
+  count?: number;
+  empty?: string;
+  children: React.ReactNode;
+}) {
+  const isEmpty = count === 0;
+  return (
+    <div className={styles.block}>
+      <h3 className={styles.blockTitle}>
+        {title}
+        {count != null && <span className={styles.count}> ({count})</span>}
+      </h3>
+      {isEmpty && empty ? <p className={styles.empty}>{empty}</p> : children}
+    </div>
+  );
+}
+
+function LogTable({
+  head,
+  numCols = [],
+  children,
+}: {
+  head: string[];
+  /** 0-based indexes of header cells that should be right-aligned. */
+  numCols?: number[];
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={styles.tableWrap}>
+      <table className={styles.table}>
+        <thead>
+          <tr>
+            {head.map((h, i) => (
+              <th key={h} className={numCols.includes(i) ? styles.num : undefined}>
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>{children}</tbody>
+      </table>
+    </div>
+  );
+}
+
+function TimeCell({ d }: { d: Date | string }) {
+  return (
+    <td className={`mono ${styles.timeCell}`} title={formatAdminTimeFull(d)}>
+      {formatAdminTime(d)}
+    </td>
+  );
+}
+
+function UserCell({
+  name,
+  discordId,
+}: {
+  name: string | null;
+  discordId: string;
+}) {
+  return (
+    <td>
+      <div className={styles.userCell}>
+        <span>{name ?? "Unknown"}</span>
+        <span className={`mono ${styles.userId}`} title={discordId}>
+          {shortId(discordId)}
+        </span>
+      </div>
+    </td>
+  );
+}
+
+function Pill({
+  tone,
+  children,
+}: {
+  tone: "ok" | "warn" | "bad";
+  children: React.ReactNode;
+}) {
+  return (
+    <span
+      className={`${styles.pill} ${
+        tone === "ok" ? styles.pillOk : tone === "bad" ? styles.pillBad : styles.pillWarn
+      }`}
+    >
+      {children}
+    </span>
   );
 }

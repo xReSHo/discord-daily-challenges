@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { submitGuess } from "@/lib/wordle/game";
 import { rateLimit, RATE_RULES } from "@/lib/rate-limit";
+import { sectionGuard } from "@/lib/section-status";
 
 /** POST /api/wordle/guess  body: { guess: string } */
 export async function POST(request: Request) {
@@ -12,6 +13,9 @@ export async function POST(request: Request) {
 
   const limited = await rateLimit("wordle:guess", RATE_RULES.mutate, discordId);
   if (limited) return limited;
+
+  const closed = await sectionGuard("wordle");
+  if (closed) return closed;
 
   let body: unknown;
   try {

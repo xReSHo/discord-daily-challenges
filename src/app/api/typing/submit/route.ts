@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { submitTest } from "@/lib/typing/game";
 import { rateLimit, RATE_RULES } from "@/lib/rate-limit";
+import { sectionGuard } from "@/lib/section-status";
 
 /** POST /api/typing/submit  body: { token, typed, durationMs, keystrokes } */
 export async function POST(request: Request) {
@@ -12,6 +13,9 @@ export async function POST(request: Request) {
 
   const limited = await rateLimit("typing:submit", RATE_RULES.mutate, discordId);
   if (limited) return limited;
+
+  const closed = await sectionGuard("typing");
+  if (closed) return closed;
 
   let body: unknown;
   try {

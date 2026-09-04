@@ -5,8 +5,10 @@ import { getChallengeDateString } from "@/lib/challenge-date";
 import { getCompletedSectionsToday } from "@/lib/completions";
 import { getAttempt } from "@/lib/attempts";
 import { SECTIONS } from "@/lib/sections";
+import { getSectionStatus } from "@/lib/section-status";
 import { AppFrame } from "@/components/AppFrame";
 import { GameHeader } from "@/components/GameHeader";
+import { SectionClosed } from "@/components/SectionClosed";
 import { LitanyGame } from "./LitanyGame";
 
 export const dynamic = "force-dynamic";
@@ -16,9 +18,10 @@ export default async function LitanyPage() {
   const discordId = session?.user?.discordId;
   if (!discordId) redirect("/");
 
-  const [completed, attempt] = await Promise.all([
+  const [completed, attempt, status] = await Promise.all([
     getCompletedSectionsToday(discordId),
     getAttempt(discordId, "litany"),
+    getSectionStatus("litany"),
   ]);
 
   return (
@@ -31,10 +34,14 @@ export default async function LitanyPage() {
           date={getChallengeDateString()}
         />
         <div className="game-stage">
-          <LitanyGame
-            completedToday={completed.has("litany")}
-            failedToday={attempt.failed}
-          />
+          {status.disabled ? (
+            <SectionClosed title="The Litany" note={status.note} />
+          ) : (
+            <LitanyGame
+              completedToday={completed.has("litany")}
+              failedToday={attempt.failed}
+            />
+          )}
         </div>
       </div>
     </AppFrame>

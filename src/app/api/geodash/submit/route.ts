@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { submitCourse } from "@/lib/geodash/game";
 import { rateLimit, RATE_RULES } from "@/lib/rate-limit";
+import { sectionGuard } from "@/lib/section-status";
 
 /** POST /api/geodash/submit  body: { token, jumpTimes: number[], totalMs } */
 export async function POST(request: Request) {
@@ -12,6 +13,9 @@ export async function POST(request: Request) {
 
   const limited = await rateLimit("geodash:submit", RATE_RULES.mutate, discordId);
   if (limited) return limited;
+
+  const closed = await sectionGuard("geodash");
+  if (closed) return closed;
 
   let body: unknown;
   try {

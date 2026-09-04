@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { submitLitany } from "@/lib/litany/game";
 import { rateLimit, RATE_RULES } from "@/lib/rate-limit";
+import { sectionGuard } from "@/lib/section-status";
 
 /** POST /api/litany/submit  body: { token, taps: number[], tapTimes: number[] } */
 export async function POST(request: Request) {
@@ -12,6 +13,9 @@ export async function POST(request: Request) {
 
   const limited = await rateLimit("litany:submit", RATE_RULES.mutate, discordId);
   if (limited) return limited;
+
+  const closed = await sectionGuard("litany");
+  if (closed) return closed;
 
   let body: unknown;
   try {

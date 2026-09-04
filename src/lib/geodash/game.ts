@@ -611,6 +611,26 @@ export async function submitCourse(
   // --- death ----------------------------------------------------------
   recordScore(discordId, SECTION, "geoPercent", sim.distancePct);
 
+  // A replay that dies within a hair of the finish, while the wall-clock and
+  // reported time both look like a full clear, is the signature of a
+  // client/server physics divergence. Log it so any regression is visible.
+  if (
+    sim.distancePct >= 99 &&
+    windowMs >= expected * 0.9 &&
+    totalMs >= expected * 0.9 &&
+    totalMs <= expected * 1.6
+  ) {
+    logger.warn("geodash.near_miss_death", {
+      discordId,
+      difficulty,
+      distancePct: Number(sim.distancePct.toFixed(2)),
+      deathAt: sim.deathAt ? Math.round(sim.deathAt) : null,
+      windowMs: Math.round(windowMs),
+      totalMs: Math.round(totalMs),
+      expected: Math.round(expected),
+    });
+  }
+
   if (row.restarts < MAX_RESTARTS) {
     // a free restart is left — keep the run open but null the token (`tokenIat`
     // 0 matches nothing) so this attempt can't be re-submitted; the client must

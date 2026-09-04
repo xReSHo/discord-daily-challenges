@@ -5,8 +5,10 @@ import { getChallengeDateString } from "@/lib/challenge-date";
 import { getCompletedSectionsToday } from "@/lib/completions";
 import { getAttempt } from "@/lib/attempts";
 import { SECTIONS } from "@/lib/sections";
+import { getSectionStatus } from "@/lib/section-status";
 import { AppFrame } from "@/components/AppFrame";
 import { GameHeader } from "@/components/GameHeader";
+import { SectionClosed } from "@/components/SectionClosed";
 import { AimTrainer } from "./AimTrainer";
 
 export const dynamic = "force-dynamic";
@@ -16,9 +18,10 @@ export default async function AimPage() {
   const discordId = session?.user?.discordId;
   if (!discordId) redirect("/");
 
-  const [completed, attempt] = await Promise.all([
+  const [completed, attempt, status] = await Promise.all([
     getCompletedSectionsToday(discordId),
     getAttempt(discordId, "aim"),
+    getSectionStatus("aim"),
   ]);
 
   return (
@@ -31,11 +34,15 @@ export default async function AimPage() {
           date={getChallengeDateString()}
         />
         <div className="game-stage">
-          <AimTrainer
-            completedToday={completed.has("aim")}
-            failedToday={attempt.failed}
-            triesUsed={attempt.fails}
-          />
+          {status.disabled ? (
+            <SectionClosed title="Aim Trainer" note={status.note} />
+          ) : (
+            <AimTrainer
+              completedToday={completed.has("aim")}
+              failedToday={attempt.failed}
+              triesUsed={attempt.fails}
+            />
+          )}
         </div>
       </div>
     </AppFrame>

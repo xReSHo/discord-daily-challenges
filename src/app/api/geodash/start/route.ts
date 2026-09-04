@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { startCourse } from "@/lib/geodash/game";
 import { rateLimit, RATE_RULES } from "@/lib/rate-limit";
+import { sectionGuard } from "@/lib/section-status";
 
 /** POST /api/geodash/start  body: { difficulty, stake? } — charges the entry
  *  and issues today's course + a signed run token. */
@@ -15,6 +16,9 @@ export async function POST(request: Request) {
   // coin fee itself is the real limiter on fresh entries / re-pays.
   const limited = await rateLimit("geodash:start", RATE_RULES.mutate, discordId);
   if (limited) return limited;
+
+  const closed = await sectionGuard("geodash");
+  if (closed) return closed;
 
   let body: unknown;
   try {

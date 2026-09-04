@@ -28,3 +28,35 @@ export function getChallengeDateString(at: Date = new Date()): string {
 export function getChallengeDate(at: Date = new Date()): Date {
   return new Date(`${getChallengeDateString(at)}T00:00:00.000Z`);
 }
+
+/**
+ * Short admin-log timestamp in the challenge timezone (Bahrain), 12-hour clock:
+ * `Sep 4, 2:06 PM`. Every timestamp on /admin uses this.
+ */
+export function formatAdminTime(d: Date | string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: CHALLENGE_TZ,
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(new Date(d));
+}
+
+/** Full-precision version for a cell's `title=` tooltip: `2026-09-04 14:06:32 (Asia/Bahrain)`. */
+export function formatAdminTimeFull(d: Date | string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: CHALLENGE_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  })
+    .format(new Date(d))
+    .replace(",", "");
+  return `${parts} (${CHALLENGE_TZ})`;
+}
