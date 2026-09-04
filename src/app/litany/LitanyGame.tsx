@@ -277,7 +277,7 @@ export function LitanyGame({
         <p className={styles.lead}>
           Watch the rite, then recite it back by touching the glyphs in order. It
           grows by one glyph each round. Clear round {cfg?.passRound ?? 10} and
-          seal to bank {cfg?.basePrize ?? 200}. Every round past that adds{" "}
+          seal to bank {cfg?.basePrize ?? 500}. Every round past that adds{" "}
           {cfg?.continueBonus ?? 100} more — but slip after round{" "}
           {cfg?.passRound ?? 10} and the whole prize is gone.
         </p>

@@ -44,7 +44,7 @@ export const SECTIONS: Record<SectionId, SectionConfig> = {
     id: "litany",
     label: "The Litany",
     href: "/litany",
-    reward: rewardFromEnv("LITANY_REWARD_AMOUNT", 200),
+    reward: rewardFromEnv("LITANY_REWARD_AMOUNT", 500),
   },
   geodash: {
     id: "geodash",
