@@ -803,7 +803,12 @@ function GeoRunStage({
   const [muted, setMuted] = useState(sound?.muted ?? true);
 
   const sRef = useRef<SimState>(initState());
+  // `consumedRef` is mutated ONLY by `step()` — it must mirror the server's
+  // `simulate` consumed-set exactly or the replay diverges. Orbs whose slow-mo
+  // window lapsed without an activation go in `offeredRef` instead, purely so
+  // the assist won't re-trigger on them.
   const consumedRef = useRef<Set<number>>(new Set());
+  const offeredRef = useRef<Set<number>>(new Set());
   const submitRef = useRef<() => void>(() => {});
   const pendingRef = useRef<number[]>([]);
   const recordRef = useRef<number[]>([]);
@@ -1161,7 +1166,7 @@ function GeoRunStage({
       } else if (o.t === "orb") {
         const cx = X(o.x);
         const cy = Y(o.y);
-        const used = consumedRef.current.has(i);
+        const used = consumedRef.current.has(i) || offeredRef.current.has(i);
         const near =
           !used &&
           Math.hypot(s.x - o.x, s.y + course.cube / 2 - o.y) < ORB_RADIUS + 0.3;
@@ -1421,6 +1426,7 @@ function GeoRunStage({
 
     sRef.current = initState();
     consumedRef.current = new Set();
+    offeredRef.current = new Set();
     pendingRef.current = [];
     recordRef.current = [];
     lastJumpSimRef.current = -1000;
@@ -1542,7 +1548,10 @@ function GeoRunStage({
         const resolved =
           consumedRef.current.has(sm.orb) || sm.elapsed >= SLOWMO_WINDOW_MS;
         if (resolved) {
-          consumedRef.current.add(sm.orb); // missed → resolved so it won't re-trigger
+          // mark it *offered* (not consumed) so the assist won't fire again on
+          // it — but leave `consumedRef` for `step()` alone so a late jump still
+          // inside the radius activates the orb identically on client + server
+          offeredRef.current.add(sm.orb);
           scaleTarget = 1;
           if (sm.scale > 0.985) sm.orb = -1;
         } else {
@@ -1588,7 +1597,12 @@ function GeoRunStage({
         if (sm.orb < 0) {
           for (let i = 0; i < course.obstacles.length; i++) {
             const o = course.obstacles[i];
-            if (o.t !== "orb" || consumedRef.current.has(i)) continue;
+            if (
+              o.t !== "orb" ||
+              consumedRef.current.has(i) ||
+              offeredRef.current.has(i)
+            )
+              continue;
             const dx = s.x - o.x;
             const dy = s.y + cubeHalf - o.y;
             if (dx * dx + dy * dy <= ORB_RADIUS * ORB_RADIUS) {
