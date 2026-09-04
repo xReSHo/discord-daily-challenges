@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { ArrowLeft, LogOut, ShieldAlert, Store, Trophy } from "lucide-react";
+import { ArrowLeft, Award, LogOut, ShieldAlert, Store, Trophy } from "lucide-react";
 import { auth } from "@/auth";
 import { isAdmin } from "@/lib/admin";
 import { isDevMode } from "@/lib/dev-mode";
 import { getBalance } from "@/lib/unbelievaboat";
 import { doSignOut } from "@/app/actions";
 import { Sigil } from "./Sigil";
+import { AchievementToaster } from "./AchievementToaster";
 import { BalancePill } from "./BalancePill";
 import { ChatWidget } from "./ChatWidget";
 import { DevModeToggle } from "./DevModeToggle";
@@ -60,6 +61,12 @@ export async function AppFrame({
                 <span className={styles.logoutLabel}>Ranks</span>
               </Link>
             )}
+            {user?.discordId && (
+              <Link href="/achievements" className={styles.adminLink} title="Achievements">
+                <Award size={15} />
+                <span className={styles.logoutLabel}>Feats</span>
+              </Link>
+            )}
             {showAdmin && <DevModeToggle on={devOn} />}
             {showAdmin && (
               <Link href="/admin" className={styles.adminLink} title="Admin">
@@ -104,6 +111,7 @@ export async function AppFrame({
         </div>
       </footer>
 
+      {user?.discordId && <AchievementToaster />}
       {user?.discordId && <ChatWidget />}
     </>
   );

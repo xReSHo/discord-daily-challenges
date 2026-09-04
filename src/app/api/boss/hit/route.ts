@@ -2,7 +2,8 @@ import { auth } from "@/auth";
 import { applyHit } from "@/lib/boss/game";
 import { rateLimit, RATE_RULES } from "@/lib/rate-limit";
 
-/** POST /api/boss/hit  body: { clicks: number } */
+/** POST /api/boss/hit
+ *  body: { clicks } for the clicker/eclipse, { sacHits, misses } for the weak-point. */
 export async function POST(request: Request) {
   const session = await auth();
   const discordId = session?.user?.discordId;
@@ -20,6 +21,6 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const result = await applyHit(discordId, (body as { clicks?: unknown })?.clicks);
+  const result = await applyHit(discordId, body);
   return Response.json(result, { status: result.ok ? 200 : 409 });
 }

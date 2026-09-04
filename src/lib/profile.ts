@@ -10,6 +10,7 @@ import { getUserStreak, dayKey } from "@/lib/streak";
 import { HIGHER_IS_BETTER, type ScoreMetric } from "@/lib/scores";
 import { SECTIONS, SECTION_IDS, type SectionId } from "@/lib/sections";
 import { MAX_GUESSES } from "@/lib/wordle/game";
+import { ACHIEVEMENTS } from "@/lib/achievements/catalog";
 
 const DAY_MS = 86_400_000;
 /** 17 weeks — a tidy 7-row heatmap. */
@@ -34,6 +35,8 @@ export type Profile = {
   heat: HeatCell[];
   games: GameStat[];
   wordle: { played: number; won: number; distribution: number[] } | null;
+  achievementsUnlocked: number;
+  achievementsTotal: number;
 };
 
 function bestFrom(
@@ -51,7 +54,7 @@ export async function getProfile(discordId: string): Promise<Profile> {
   const today = Date.parse(`${getChallengeDateString()}T00:00:00.000Z`);
   const heatStart = new Date(today - (HEAT_DAYS - 1) * DAY_MS);
 
-  const [streak, coinSum, perGame, heatRows, bestRows, wordleRows] =
+  const [streak, coinSum, perGame, heatRows, bestRows, wordleRows, achievementCount] =
     await Promise.all([
       getUserStreak(discordId),
       prisma.completion.aggregate({
@@ -83,6 +86,7 @@ export async function getProfile(discordId: string): Promise<Profile> {
         where: { discordId, finished: true },
         select: { guesses: true, won: true },
       }),
+      prisma.achievement.count({ where: { discordId } }),
     ]);
 
   // heatmap
@@ -133,5 +137,7 @@ export async function getProfile(discordId: string): Promise<Profile> {
     heat,
     games,
     wordle,
+    achievementsUnlocked: achievementCount,
+    achievementsTotal: ACHIEVEMENTS.length,
   };
 }

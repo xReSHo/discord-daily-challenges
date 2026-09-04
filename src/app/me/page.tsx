@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Flame, Trophy } from "lucide-react";
+import { Award, Flame, Trophy } from "lucide-react";
 import { getProfile } from "@/lib/profile";
 import { MAX_GUESSES } from "@/lib/wordle/game";
 import type { ScoreMetric } from "@/lib/scores";
@@ -82,6 +82,13 @@ export default async function MePage() {
             <span className={styles.tileNum}>{p.activeDays}</span>
             <span className={styles.tileLabel}>days active</span>
           </div>
+          <Link href="/achievements" className={`panel ${styles.tile}`}>
+            <span className={styles.tileNum}>
+              <Award size={18} />
+              {p.achievementsUnlocked}/{p.achievementsTotal}
+            </span>
+            <span className={styles.tileLabel}>achievements</span>
+          </Link>
         </div>
 
         <section className={`panel panel--pad ${styles.section} rise`}>

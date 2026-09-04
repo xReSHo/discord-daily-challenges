@@ -214,3 +214,165 @@
   border-color: var(--bad);
   color: var(--bad-bright);
 }
+
+/* ---------- roster cards ---------- */
+.rosterCards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.rosterCard {
+  border: 1px solid var(--line-2);
+  border-radius: var(--r);
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.rosterCard[open] {
+  border-color: var(--line-gold);
+}
+
+.rosterSummary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 13px 16px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.rosterSummary::-webkit-details-marker {
+  display: none;
+}
+
+.rosterSummary::before {
+  content: "▸";
+  margin-right: 8px;
+  color: var(--ink-faint);
+  transition: transform 0.15s;
+  display: inline-block;
+}
+
+.rosterCard[open] .rosterSummary::before {
+  transform: rotate(90deg);
+}
+
+.rosterName {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.rosterTags {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--ink-mute);
+}
+
+.mechTag {
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--gold-bright);
+  border: 1px solid var(--line-gold);
+  border-radius: 999px;
+}
+
+.onTag,
+.offTag {
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  border-radius: 999px;
+}
+
+.onTag {
+  color: var(--ok-bright);
+  border: 1px solid color-mix(in srgb, var(--ok) 40%, transparent);
+}
+
+.offTag {
+  color: var(--ink-faint);
+  border: 1px solid var(--line-2);
+}
+
+.rosterCard .form {
+  padding: 4px 16px 18px;
+  max-width: none;
+}
+
+.mechNote {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-mute);
+  margin-bottom: 4px;
+}
+
+/* ---------- labelled param groups ---------- */
+.pGroup {
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 8px 14px 14px;
+  margin: 0;
+}
+
+.pLegend {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold-deep);
+  padding: 0 6px;
+}
+
+.pGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px 14px;
+}
+
+.pField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-dim);
+}
+
+.pInput {
+  padding: 7px 9px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--bg-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r);
+}
+
+.pInput:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: var(--ring);
+}
+
+.pInput:disabled {
+  color: var(--ink-faint);
+}
+
+.pHint {
+  font-size: 10.5px;
+  color: var(--ink-faint);
+}

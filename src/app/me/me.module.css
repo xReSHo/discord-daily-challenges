@@ -45,6 +45,13 @@
   gap: 4px;
   padding: 20px 14px;
   text-align: center;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.2s var(--ease);
+}
+
+a.tile:hover {
+  border-color: var(--line-gold);
 }
 
 .tileNum {

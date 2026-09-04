@@ -28,6 +28,37 @@ export type BossState = {
   dmgPerClick: number;
   rewardPool: number;
   penaltyEach: number;
+  /** How this boss is fought. */
+  mechanic: "clicker" | "eclipse" | "weakpoint" | "miniarena";
+  /** Eclipse phase config (mechanic === "eclipse" only). The client walks the
+   *  same seeded sequence from `spawnsAt` to render the live phase + countdown;
+   *  the server applies the authoritative multiplier on each hit. */
+  phase?: {
+    darkMult: number;
+    neutralMult: number;
+    lightMult: number;
+    neutralMs: [number, number];
+    darkMs: [number, number];
+    lightMs: [number, number];
+  };
+  /** Weak-point sac schedule (mechanic === "weakpoint" only). The client
+   *  derives the live sacs from this + `spawnsAt` + `bossKey`. */
+  weakpoint?: {
+    slots: number;
+    sacIntervalMs: number;
+    sacTtlMs: number;
+    dmgPerSac: number;
+    stallMs: number;
+  };
+  /** Mini-arena trials on offer (mechanic === "miniarena" only). */
+  mini?: { games: string[] };
+  /** Epoch ms this fighter's cooldown lifts (weak-point stall / mini-run
+   *  cooldown), or null. */
+  yourCooldownUntil?: number | null;
+  /** One-line "how to fight" copy for the arena + the bot spawn embed. */
+  blurb: string;
+  /** Portrait asset base path — `${image}.webp` / `${image}.png`. */
+  image: string;
   /** Admin-spawned test boss — only admins see or fight it. */
   adminOnly: boolean;
   /** Whether resolving this boss moves real UnbelievaBoat coins. */

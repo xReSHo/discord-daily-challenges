@@ -1,15 +1,12 @@
 "use client";
 
-import {
-  memo,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import { Coins, Users, Swords, Timer } from "lucide-react";
-import type { BossState, BossLeader, HitResponse } from "@/lib/boss/types";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Users, Swords, Timer } from "lucide-react";
+import type { BossState, HitResponse } from "@/lib/boss/types";
+import { eclipsePhaseAt } from "@/lib/boss/mechanics/eclipse";
+import { WeakpointArena } from "./WeakpointArena";
+import { MiniArena } from "./mini/MiniArena";
+import { AdminBar, BossPortrait, Leaderboard, Outcome, fmtDuration } from "./shared";
 import styles from "./boss.module.css";
 
 // Kept deliberately low-chatter for a free serverless host: while you're
@@ -26,25 +23,29 @@ const STREAK_GAP_MS = 4000; // over-cap events further apart than this reset the
 const CAPTCHA_STREAK_HITS = 24; // this many over-cap clicks in one streak -> captcha
 const CAPTCHA_BURST_WINDOW_MS = 1200;
 
-function fmtDuration(ms: number): string {
-  if (ms <= 0) return "0s";
-  const s = Math.floor(ms / 1000);
-  const d = Math.floor(s / 86400);
-  const h = Math.floor((s % 86400) / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = s % 60;
-  if (d > 0) return `${d}d ${h}h ${m}m`;
-  if (h > 0) return `${h}h ${String(m).padStart(2, "0")}m ${String(sec).padStart(2, "0")}s`;
-  return `${m}m ${String(sec).padStart(2, "0")}s`;
-}
-
 type Captcha = { a: number; b: number };
 function makeCaptcha(): Captcha {
   const r = () => 2 + Math.floor(Math.random() * 8);
   return { a: r(), b: r() };
 }
 
+/**
+ * Routes to the right arena for the boss's mechanic. The dispatch is fixed at
+ * mount (`initial` never changes — the page is force-dynamic and fetched once);
+ * each arena reloads the page if a poll shows it's the wrong one now (e.g. an
+ * upcoming→active transition, or the fight ending).
+ */
 export function BossArena({ initial }: { initial: BossState }) {
+  if (initial.status === "active" && initial.mechanic === "weakpoint") {
+    return <WeakpointArena initial={initial} />;
+  }
+  if (initial.status === "active" && initial.mechanic === "miniarena") {
+    return <MiniArena initial={initial} />;
+  }
+  return <ClickerArena initial={initial} />;
+}
+
+function ClickerArena({ initial }: { initial: BossState }) {
   // slow, authoritative state — only changes on poll / flush response
   const [server, setServer] = useState<BossState>(initial);
   // fast display state — ticked from refs, never set per-click
@@ -54,7 +55,6 @@ export function BossArena({ initial }: { initial: BossState }) {
   const [captcha, setCaptcha] = useState<Captcha | null>(null);
   const [captchaInput, setCaptchaInput] = useState("");
   const [captchaBad, setCaptchaBad] = useState(false);
-  const [despawning, setDespawning] = useState(false);
 
   const pendingRef = useRef(0); // clicks not yet sent
   const unackedRef = useRef(0); // clicks in the in-flight request
@@ -68,13 +68,28 @@ export function BossArena({ initial }: { initial: BossState }) {
   const flushingRef = useRef(false);
   const activeRef = useRef(false);
   const captchaRef = useRef(false);
+  const multRef = useRef(1); // current eclipse damage multiplier, for the ticker
 
   const active = server.status === "active" && !server.slain;
+
+  // eclipse phase — derived locally from spawnsAt + the cycle config, so the
+  // countdown ticks between polls with no extra request. The server still owns
+  // the authoritative multiplier applied to each hit.
+  const phase = useMemo(() => {
+    if (!server.phase) return null;
+    return eclipsePhaseAt(
+      server.phase,
+      server.spawnsAt,
+      Date.parse(server.spawnsAt),
+      now,
+    );
+  }, [server.phase, server.spawnsAt, now]);
 
   // mirror render values into refs for the long-lived intervals
   useEffect(() => {
     activeRef.current = active;
     captchaRef.current = captcha !== null;
+    multRef.current = phase?.mult ?? 1;
   });
 
   // --- idle poll (skipped entirely while you're actively fighting) ---
@@ -94,6 +109,14 @@ export function BossArena({ initial }: { initial: BossState }) {
         if (!res.ok) return;
         const next = (await res.json()) as BossState;
         if (!alive) return;
+        // a mechanic that needs its own arena just went live — reload into it
+        if (
+          next.status === "active" &&
+          (next.mechanic === "weakpoint" || next.mechanic === "miniarena")
+        ) {
+          window.location.reload();
+          return;
+        }
         setServer((prev) => ({
           ...next,
           hp: Math.min(prev.hp, next.hp),
@@ -144,7 +167,7 @@ export function BossArena({ initial }: { initial: BossState }) {
   useEffect(() => {
     const id = setInterval(() => {
       const inflight = pendingRef.current + unackedRef.current;
-      const dmg = inflight * server.dmgPerClick;
+      const dmg = inflight * server.dmgPerClick * multRef.current;
       const hpR = Math.ceil(Math.max(0, server.hp - dmg));
       const mineR = Math.round((server.yourDamage + dmg) * 10) / 10;
       setDisplay((d) =>
@@ -252,28 +275,9 @@ export function BossArena({ initial }: { initial: BossState }) {
   const expiresIn = new Date(server.expiresAt).getTime() - now;
   const nextIn = new Date(server.nextSpawnsAt).getTime() - now;
 
-  const adminNote = server.viewerIsAdmin ? (
-    <span className={styles.adminBar}>
-      <a href="/admin/boss" className={styles.adminLink}>
-        Boss control →
-      </a>
-      {server.status === "active" && (
-        <button
-          type="button"
-          className={styles.despawnBtn}
-          disabled={despawning}
-          onClick={() => {
-            setDespawning(true);
-            fetch("/api/boss/despawn", { method: "POST" }).finally(() =>
-              window.location.reload(),
-            );
-          }}
-        >
-          {despawning ? "Despawning…" : "Despawn (test)"}
-        </button>
-      )}
-    </span>
-  ) : null;
+  const adminNote = (
+    <AdminBar show={server.viewerIsAdmin} active={server.status === "active"} />
+  );
 
   // ---------- upcoming ----------
   if (server.status === "upcoming") {
@@ -282,17 +286,19 @@ export function BossArena({ initial }: { initial: BossState }) {
         <p className="eyebrow">The Weekly Raid</p>
         <h1 className={styles.name}>{server.name}</h1>
         {adminNote}
-        <BossPortrait dimmed />
+        <BossPortrait image={server.image} name={server.name} dimmed />
         <p className={styles.lead}>
-          The Hollow Sovereign returns in{" "}
+          {server.name} returns in{" "}
           <span className={styles.count}>{fmtDuration(spawnsIn)}</span>.
         </p>
         <p className={styles.sub}>
-          When he rises, strike him by clicking — {server.dmgPerClick} damage a
-          click, {server.cpsCap} clicks a second, {server.maxHp.toLocaleString()}{" "}
-          health. Fell him and split {server.rewardPool.toLocaleString()} coins by
-          the damage you dealt. Fight and fail and you lose{" "}
-          {server.penaltyEach.toLocaleString()}.
+          {server.blurb ? `${server.blurb} ` : null}
+          {server.mechanic === "clicker"
+            ? `${server.dmgPerClick} damage a click, ${server.cpsCap} clicks a second. `
+            : null}
+          {server.maxHp.toLocaleString()} health — fell it and split{" "}
+          {server.rewardPool.toLocaleString()} coins by the damage you dealt.
+          Fight and fail and you lose {server.penaltyEach.toLocaleString()}.
         </p>
       </div>
     );
@@ -305,12 +311,17 @@ export function BossArena({ initial }: { initial: BossState }) {
         <p className="eyebrow">The Weekly Raid</p>
         <h1 className={styles.name}>{server.name}</h1>
         {adminNote}
-        <BossPortrait fallen={server.slain} dimmed />
+        <BossPortrait
+          image={server.image}
+          name={server.name}
+          fallen={server.slain}
+          dimmed
+        />
         {server.slain ? (
-          <p className={`${styles.lead} ${styles.won}`}>Veyrath has fallen.</p>
+          <p className={`${styles.lead} ${styles.won}`}>{server.name} has fallen.</p>
         ) : (
           <p className={`${styles.lead} ${styles.lost}`}>
-            Veyrath escaped into the mist.
+            {server.name} escaped into the mist.
           </p>
         )}
         <Outcome state={server} />
@@ -353,8 +364,46 @@ export function BossArena({ initial }: { initial: BossState }) {
         </div>
       </div>
 
-      <div className={styles.portraitWrap}>
-        <BossPortrait ref={portraitRef} onHit={onHit} />
+      {phase && (
+        <div
+          className={`${styles.eclipse} ${
+            phase.kind === "dark"
+              ? styles.eclipseDark
+              : phase.kind === "light"
+                ? styles.eclipseLight
+                : styles.eclipseNeutral
+          }`}
+        >
+          <span className={styles.eclipseState}>
+            {phase.kind === "dark"
+              ? "The black sun is open"
+              : phase.kind === "light"
+                ? "The light drowns your blows"
+                : "The dusk holds — clean strikes"}
+          </span>
+          <span className={styles.eclipseMult}>hits ×{phase.mult}</span>
+          <span className={`mono ${styles.eclipseClock}`}>
+            {fmtDuration(phase.endsInMs)} →{" "}
+            {phase.nextKind === "dark"
+              ? "black sun"
+              : phase.nextKind === "light"
+                ? "the light"
+                : "the dusk"}
+          </span>
+        </div>
+      )}
+
+      <div
+        className={`${styles.portraitWrap} ${
+          phase?.kind === "dark" ? styles.portraitLit : ""
+        }`}
+      >
+        <BossPortrait
+          ref={portraitRef}
+          image={server.image}
+          name={server.name}
+          onHit={onHit}
+        />
         {captcha && (
           <div className={styles.captcha} role="dialog" aria-label="Quick check">
             <p className={styles.captchaTitle}>Quick check</p>
@@ -415,95 +464,3 @@ export function BossArena({ initial }: { initial: BossState }) {
   );
 }
 
-// portrait is a `button` when hittable so it can hold the imperative hurt ref
-const BossPortrait = memo(function BossPortrait({
-  ref,
-  onHit,
-  dimmed,
-  fallen,
-}: {
-  ref?: React.Ref<HTMLButtonElement>;
-  onHit?: () => void;
-  dimmed?: boolean;
-  fallen?: boolean;
-}) {
-  const cls = [
-    styles.portrait,
-    dimmed ? styles.dimmed : "",
-    fallen ? styles.fallen : "",
-    onHit ? styles.hittable : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-
-  const content = (
-    <picture>
-      <source srcSet="/boss/veyrath-idle.webp" type="image/webp" />
-      <img
-        src="/boss/veyrath-idle.png"
-        alt="Veyrath, The Hollow Sovereign"
-        draggable={false}
-      />
-    </picture>
-  );
-
-  if (!onHit) return <div className={cls}>{content}</div>;
-  return (
-    <button
-      ref={ref}
-      type="button"
-      className={cls}
-      onPointerDown={(e) => {
-        e.preventDefault();
-        onHit();
-      }}
-      aria-label="Strike Veyrath"
-    >
-      {content}
-      <span className={styles.hitRing} aria-hidden />
-    </button>
-  );
-});
-
-function Outcome({ state }: { state: BossState }) {
-  if (state.yourDamage <= 0) {
-    return <p className={styles.sub}>You didn&apos;t join this fight.</p>;
-  }
-  if (state.yourPayout === null) {
-    return (
-      <p className={styles.sub}>
-        You dealt {state.yourDamage.toLocaleString()} damage — the{" "}
-        {state.slain ? "bounty" : "tally"} is being settled.
-      </p>
-    );
-  }
-  if (state.yourPayout >= 0) {
-    return (
-      <p className={`${styles.sub} ${styles.won}`}>
-        <Coins size={14} /> +{state.yourPayout.toLocaleString()} coins for{" "}
-        {state.yourDamage.toLocaleString()} damage.
-      </p>
-    );
-  }
-  return (
-    <p className={`${styles.sub} ${styles.lost}`}>
-      {state.yourPayout.toLocaleString()} coins — you fought and Veyrath lived.
-    </p>
-  );
-}
-
-const Leaderboard = memo(function Leaderboard({ top }: { top: BossLeader[] }) {
-  const rows = useMemo(() => top, [top]);
-  if (rows.length === 0) return null;
-  return (
-    <ol className={styles.board}>
-      {rows.map((l) => (
-        <li key={l.rank} className={l.you ? styles.youRow : undefined}>
-          <span className={styles.rank}>{l.rank}</span>
-          <span className={styles.who}>{l.name}</span>
-          <span className={`mono ${styles.dmg}`}>{l.damage.toLocaleString()}</span>
-        </li>
-      ))}
-    </ol>
-  );
-});

@@ -19,7 +19,11 @@ import { addCurrency } from "@/lib/unbelievaboat";
 import { isAdmin } from "@/lib/admin";
 import { flagAttempt } from "@/lib/audit";
 import { logger } from "@/lib/logger";
+import { evaluateAchievements } from "@/lib/achievements/engine";
 import { getBossConfig, type BossConfig } from "./config";
+import { pickWeeklyTemplate } from "./roster";
+import { eclipseConfig, eclipsePhaseAt } from "./mechanics/eclipse";
+import { sacsOffered, weakpointConfig } from "./mechanics/weakpoint";
 import { weeklyWindow } from "./window";
 import type { BossState } from "./types";
 
@@ -33,6 +37,25 @@ function clamp(n: number, lo: number, hi: number): number {
 }
 
 type BossRow = Prisma.BossGetPayload<object>;
+
+/** The click-damage knobs for a boss — snapshotted onto `params` at spawn,
+ *  with the legacy BossConfig values as the fallback for pre-roster rows. */
+function clickerParams(
+  boss: BossRow,
+  cfg: BossConfig,
+): { dmgPerClick: number; maxCps: number } {
+  const p = (boss.params ?? {}) as Record<string, unknown>;
+  return {
+    dmgPerClick:
+      typeof p.dmgPerClick === "number" && p.dmgPerClick > 0
+        ? p.dmgPerClick
+        : cfg.dmgPerClick,
+    maxCps:
+      typeof p.maxCps === "number" && p.maxCps >= 1
+        ? Math.floor(p.maxCps)
+        : cfg.maxCps,
+  };
+}
 
 // --- which boss is live -------------------------------------------------
 
@@ -60,18 +83,42 @@ async function lazyCreateWeekly(cfg: BossConfig): Promise<BossRow | null> {
   const existing = await prisma.boss.findUnique({ where: { dedupeKey } });
   if (existing) return existing;
 
+  const tpl = await pickWeeklyTemplate(win.weekOf);
+  const snapshot = tpl
+    ? {
+        templateKey: tpl.key,
+        name: tpl.name,
+        mechanic: tpl.mechanic,
+        params: tpl.params as Prisma.InputJsonValue,
+        image: tpl.image,
+        blurb: tpl.blurb,
+        maxHp: tpl.maxHp,
+        rewardPool: tpl.rewardPool,
+        penalty: tpl.penalty,
+      }
+    : {
+        name: cfg.name,
+        mechanic: "clicker",
+        params: {
+          dmgPerClick: cfg.dmgPerClick,
+          maxCps: cfg.maxCps,
+        } as Prisma.InputJsonValue,
+        image: "/boss/veyrath-idle",
+        blurb: "",
+        maxHp: cfg.maxHp,
+        rewardPool: cfg.rewardPool,
+        penalty: cfg.penalty,
+      };
+
   try {
     return await prisma.boss.create({
       data: {
         dedupeKey,
         source: "weekly",
         weekOf: new Date(`${win.weekOf}T00:00:00.000Z`),
-        name: cfg.name,
-        maxHp: cfg.maxHp,
-        rewardPool: cfg.rewardPool,
-        penalty: cfg.penalty,
         spawnsAt: win.spawnsAt,
         expiresAt: win.expiresAt,
+        ...snapshot,
       },
     });
   } catch (err) {
@@ -261,16 +308,29 @@ export async function getBossState(
   // per-fighter numbers
   let yourDamage = fresh?.yourDamage ?? 0;
   let yourPayout: number | null = null;
+  let yourCooldownUntil: number | null = null;
   if (!fresh && discordId && boss) {
     const mine = await prisma.bossHit.findUnique({
       where: { bossId_discordId: { bossId: boss.id, discordId } },
-      select: { damage: true, settled: true, payout: true },
+      select: { damage: true, settled: true, payout: true, meta: true },
     });
     if (mine) {
       yourDamage = mine.damage;
       if (mine.settled) yourPayout = mine.payout;
+      const m = mine.meta as { stallUntil?: number; miniCdUntil?: number } | null;
+      const cd =
+        boss.mechanic === "weakpoint"
+          ? m?.stallUntil
+          : boss.mechanic === "miniarena"
+            ? m?.miniCdUntil
+            : undefined;
+      if ((cd ?? 0) > Date.now()) yourCooldownUntil = cd ?? null;
     }
   }
+
+  const clk = boss
+    ? clickerParams(boss, cfg)
+    : { dmgPerClick: cfg.dmgPerClick, maxCps: cfg.maxCps };
 
   const maxHp = boss?.maxHp ?? cfg.maxHp;
   const dealt = fresh?.dealt ?? Math.min(boss?.dealtDamage ?? 0, maxHp);
@@ -301,10 +361,33 @@ export async function getBossState(
     })),
     yourDamage: Math.round(yourDamage * 10) / 10,
     yourPayout,
-    cpsCap: cfg.maxCps,
-    dmgPerClick: cfg.dmgPerClick,
+    cpsCap: clk.maxCps,
+    dmgPerClick: clk.dmgPerClick,
     rewardPool: boss?.rewardPool ?? cfg.rewardPool,
     penaltyEach: boss?.penalty ?? cfg.penalty,
+    mechanic: (boss?.mechanic as BossState["mechanic"]) ?? "clicker",
+    phase:
+      boss?.mechanic === "eclipse" ? eclipseConfig(boss.params) : undefined,
+    weakpoint:
+      boss?.mechanic === "weakpoint"
+        ? (() => {
+            const w = weakpointConfig(boss.params);
+            return {
+              slots: w.slots,
+              sacIntervalMs: w.sacIntervalMs,
+              sacTtlMs: w.sacTtlMs,
+              dmgPerSac: w.dmgPerSac,
+              stallMs: w.stallMs,
+            };
+          })()
+        : undefined,
+    mini:
+      boss?.mechanic === "miniarena"
+        ? { games: ["typing", "aim", "litany"] }
+        : undefined,
+    yourCooldownUntil,
+    blurb: boss?.blurb ?? "",
+    image: boss?.image ?? "/boss/veyrath-idle",
     adminOnly: boss?.adminOnly ?? false,
     paysOut: boss?.paysOut ?? true,
     source: (boss?.source as BossState["source"]) ?? "weekly",
@@ -321,7 +404,12 @@ export type HitResult =
   | { ok: false; error: "no_active_boss"; state: BossState }
   | { ok: true; state: BossState; applied: number };
 
-export async function applyHit(discordId: string, rawClicks: unknown): Promise<HitResult> {
+/**
+ * Land a batch of actions on the live boss. `body` is the raw request body —
+ * `{ clicks }` for the clicker / eclipse, `{ sacHits, misses }` for the
+ * weak-point. Dispatches on the boss's mechanic.
+ */
+export async function applyHit(discordId: string, body: unknown): Promise<HitResult> {
   const viewerIsAdmin = isAdmin(discordId);
   const boss = await cachedLiveBoss(viewerIsAdmin);
 
@@ -329,39 +417,45 @@ export async function applyHit(discordId: string, rawClicks: unknown): Promise<H
     return { ok: false, error: "no_active_boss", state: await getBossState(discordId) };
   }
 
-  const cfg = await getBossConfig();
-  const key = `${boss.id}:${discordId}`;
-  const now = Date.now();
+  return boss.mechanic === "weakpoint"
+    ? strikeWeakpoint(discordId, boss, body)
+    : clickBoss(discordId, boss, body);
+}
 
-  let lastMs = lastHitMs.get(key);
-  if (lastMs === undefined) {
-    const row = await prisma.bossHit.findUnique({
-      where: { bossId_discordId: { bossId: boss.id, discordId } },
-      select: { lastHitAt: true },
-    });
-    lastMs = row ? row.lastHitAt.getTime() : now - 1000;
+async function readLastMs(bossId: string, discordId: string, now: number): Promise<number> {
+  const cached = lastHitMs.get(`${bossId}:${discordId}`);
+  if (cached !== undefined) return cached;
+  const row = await prisma.bossHit.findUnique({
+    where: { bossId_discordId: { bossId, discordId } },
+    select: { lastHitAt: true },
+  });
+  return row ? row.lastHitAt.getTime() : now - 1000;
+}
+
+/**
+ * Apply `dmg` from `actions` landed actions: bump the boss, run the slay check,
+ * upsert this fighter's BossHit row, and build fresh state. Shared by every
+ * mechanic. `clicks` is the running "actions landed" tally that keeps a fighter
+ * eligible for the payout split.
+ */
+async function commitDamage(
+  boss: BossRow,
+  discordId: string,
+  dmg: number,
+  actions: number,
+  now: number,
+  meta?: Prisma.InputJsonValue,
+): Promise<{ state: BossState; applied: number }> {
+  if (dmg <= 0 && actions <= 0) {
+    if (meta !== undefined) {
+      await prisma.bossHit.upsert({
+        where: { bossId_discordId: { bossId: boss.id, discordId } },
+        create: { bossId: boss.id, discordId, meta, lastHitAt: new Date(now) },
+        update: { meta, lastHitAt: new Date(now) },
+      });
+    }
+    return { state: await getBossState(discordId), applied: 0 };
   }
-
-  const elapsedSec = clamp((now - lastMs) / 1000, 0.05, 5);
-  const budget = Math.ceil(cfg.maxCps * elapsedSec) + cfg.maxCps;
-  const requested = Math.max(0, Math.floor(Number(rawClicks) || 0));
-  const applied = Math.min(requested, budget);
-
-  if (requested >= 30 && requested > budget * 5) {
-    flagAttempt(discordId, SECTION, "autoclicker suspected", {
-      requested,
-      budget,
-      elapsedSec: Number(elapsedSec.toFixed(2)),
-    });
-  }
-
-  lastHitMs.set(key, now);
-
-  if (applied <= 0) {
-    return { ok: true, state: await getBossState(discordId), applied: 0 };
-  }
-
-  const dmg = applied * cfg.dmgPerClick;
 
   const updated = await prisma.boss.update({
     where: { id: boss.id },
@@ -380,10 +474,18 @@ export async function applyHit(discordId: string, rawClicks: unknown): Promise<H
 
   const mine = await prisma.bossHit.upsert({
     where: { bossId_discordId: { bossId: boss.id, discordId } },
-    create: { bossId: boss.id, discordId, damage: dmg, clicks: applied, lastHitAt: new Date(now) },
+    create: {
+      bossId: boss.id,
+      discordId,
+      damage: dmg,
+      clicks: actions,
+      ...(meta !== undefined ? { meta } : {}),
+      lastHitAt: new Date(now),
+    },
     update: {
       damage: { increment: dmg },
-      clicks: { increment: applied },
+      clicks: { increment: actions },
+      ...(meta !== undefined ? { meta } : {}),
       lastHitAt: new Date(now),
     },
     select: { damage: true },
@@ -397,7 +499,165 @@ export async function applyHit(discordId: string, rawClicks: unknown): Promise<H
     yourDamage: mine.damage,
     boss: { ...boss, dealtDamage: updated.dealtDamage, slain },
   });
-  return { ok: true, state, applied };
+  return { state, applied: actions };
+}
+
+/** Clicker + eclipse — body `{ clicks }`. */
+async function clickBoss(
+  discordId: string,
+  boss: BossRow,
+  body: unknown,
+): Promise<HitResult> {
+  const cfg = await getBossConfig();
+  const { dmgPerClick, maxCps } = clickerParams(boss, cfg);
+  const key = `${boss.id}:${discordId}`;
+  const now = Date.now();
+  const lastMs = await readLastMs(boss.id, discordId, now);
+
+  const elapsedSec = clamp((now - lastMs) / 1000, 0.05, 5);
+  const budget = Math.ceil(maxCps * elapsedSec) + maxCps;
+  const requested = Math.max(
+    0,
+    Math.floor(Number((body as { clicks?: unknown })?.clicks) || 0),
+  );
+  const applied = Math.min(requested, budget);
+
+  if (requested >= 30 && requested > budget * 5) {
+    flagAttempt(discordId, SECTION, "autoclicker suspected", {
+      requested,
+      budget,
+      elapsedSec: Number(elapsedSec.toFixed(2)),
+    });
+  }
+
+  lastHitMs.set(key, now);
+
+  if (applied <= 0) {
+    return { ok: true, state: await getBossState(discordId), applied: 0 };
+  }
+
+  let dmg = applied * dmgPerClick;
+  if (boss.mechanic === "eclipse") {
+    dmg *= eclipsePhaseAt(
+      eclipseConfig(boss.params),
+      boss.spawnsAt.toISOString(),
+      boss.spawnsAt.getTime(),
+      now,
+    ).mult;
+  }
+
+  const { state, applied: a } = await commitDamage(boss, discordId, dmg, applied, now);
+  return { ok: true, state, applied: a };
+}
+
+/** Weak-point (Silt Cardinal) — body `{ sacHits, misses }`. */
+async function strikeWeakpoint(
+  discordId: string,
+  boss: BossRow,
+  body: unknown,
+): Promise<HitResult> {
+  const p = weakpointConfig(boss.params);
+  const key = `${boss.id}:${discordId}`;
+  const now = Date.now();
+  const spawnMs = boss.spawnsAt.getTime();
+
+  const b = (body ?? {}) as { sacHits?: unknown; misses?: unknown };
+  const sacHits = Math.max(0, Math.floor(Number(b.sacHits) || 0));
+  const misses = Math.max(0, Math.floor(Number(b.misses) || 0));
+
+  const existing = await prisma.bossHit.findUnique({
+    where: { bossId_discordId: { bossId: boss.id, discordId } },
+    select: { lastHitAt: true, meta: true },
+  });
+  const lastMs =
+    lastHitMs.get(key) ??
+    (existing ? existing.lastHitAt.getTime() : now - 1000);
+  lastHitMs.set(key, now);
+
+  const meta = (existing?.meta ?? {}) as {
+    missStreak?: number;
+    stallUntil?: number;
+  };
+  let missStreak = meta.missStreak ?? 0;
+  let stallUntil = meta.stallUntil ?? 0;
+
+  const elapsedSec = clamp((now - lastMs) / 1000, 0.05, 5);
+  let credited = 0;
+
+  if (stallUntil <= now) {
+    const offered = sacsOffered(p, lastMs - spawnMs, now - spawnMs);
+    const budget = Math.ceil(p.maxSacsPerSec * elapsedSec) + p.maxSacsPerSec;
+    credited = Math.min(sacHits, offered, budget);
+
+    if (sacHits >= 15 && sacHits > offered * 4) {
+      flagAttempt(discordId, SECTION, "weakpoint impossible claims", {
+        sacHits,
+        offered,
+        elapsedSec: Number(elapsedSec.toFixed(2)),
+      });
+    }
+
+    // only sloppy flushes (more misses than landed sacs) build toward a stall;
+    // any net-positive flush wipes it clean
+    const net = misses - credited;
+    missStreak = net > 0 ? missStreak + net : 0;
+    if (missStreak >= p.stallAt) {
+      stallUntil = now + p.stallMs;
+      missStreak = 0;
+      credited = 0; // the rot bites this flush
+    }
+  }
+
+  const dmg = credited * p.dmgPerSac;
+  const { state, applied } = await commitDamage(
+    boss,
+    discordId,
+    dmg,
+    credited,
+    now,
+    { missStreak, stallUntil } as Prisma.InputJsonValue,
+  );
+  return {
+    ok: true,
+    state: { ...state, yourCooldownUntil: stallUntil > now ? stallUntil : null },
+    applied,
+  };
+}
+
+// --- mini-arena (Unraveled Saint) -----------------------------------
+
+/** The live boss iff it's a mini-arena boss visible to this fighter. */
+export async function liveMiniBoss(discordId: string): Promise<BossRow | null> {
+  const boss = await cachedLiveBoss(isAdmin(discordId));
+  return boss && boss.mechanic === "miniarena" ? boss : null;
+}
+
+/**
+ * Land a scored mini-run's damage (0 for a rejected run) and stamp this
+ * fighter's inter-run cooldown. Called only from src/lib/boss/mini.
+ */
+export async function applyMiniDamage(
+  discordId: string,
+  bossId: string,
+  dmg: number,
+  cooldownUntil: number,
+): Promise<BossState> {
+  const boss = await cachedLiveBoss(isAdmin(discordId));
+  if (!boss || boss.id !== bossId) return getBossState(discordId);
+
+  const clean = Math.max(0, Number.isFinite(dmg) ? dmg : 0);
+  const { state } = await commitDamage(
+    boss,
+    discordId,
+    clean,
+    clean > 0 ? 1 : 0,
+    Date.now(),
+    { miniCdUntil: cooldownUntil } as Prisma.InputJsonValue,
+  );
+  return {
+    ...state,
+    yourCooldownUntil: cooldownUntil > Date.now() ? cooldownUntil : null,
+  };
 }
 
 /**
@@ -434,6 +694,7 @@ export async function despawnBoss(bossId?: string): Promise<boolean> {
 export type ResolveResult = {
   outcome: "slain" | "escaped" | "none" | "pending";
   weekOf?: string;
+  bossName: string;
   paid: boolean;
   participants: number;
   totalPaid: number;
@@ -456,6 +717,7 @@ export async function resolveBoss(bossId?: string): Promise<ResolveResult> {
     const cfg = await getBossConfig();
     return {
       outcome: "none",
+      bossName: boss?.name ?? cfg.name,
       paid: true,
       participants: 0,
       totalPaid: 0,
@@ -502,6 +764,15 @@ export async function resolveBoss(bossId?: string): Promise<ResolveResult> {
     });
     if (claim.count === 0) continue;
 
+    if (boss.slain) {
+      evaluateAchievements(h.discordId).catch((err) =>
+        logger.error("achievements.eval_call_failed", {
+          discordId: h.discordId,
+          message: String(err),
+        }),
+      );
+    }
+
     try {
       if (boss.paysOut && amount !== 0) await addCurrency(h.discordId, amount, reason, target);
       totalPaid += Math.abs(amount);
@@ -538,6 +809,7 @@ export async function resolveBoss(bossId?: string): Promise<ResolveResult> {
   return {
     outcome: unsettled > 0 ? "pending" : boss.slain ? "slain" : "escaped",
     weekOf: boss.weekOf.toISOString().slice(0, 10),
+    bossName: boss.name,
     paid: boss.paysOut,
     participants: allHits.length,
     totalPaid,

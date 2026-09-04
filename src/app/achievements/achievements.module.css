@@ -1,0 +1,112 @@
+.head {
+  padding-block: 4px 40px;
+}
+
+.title {
+  margin-top: 12px;
+  font-size: clamp(2rem, 5vw, 2.9rem);
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+}
+
+.meta {
+  margin-top: 20px;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+.grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 1fr;
+  padding-bottom: 40px;
+}
+
+@media (min-width: 640px) {
+  .grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (min-width: 980px) {
+  .grid {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  padding: 26px;
+  min-height: 210px;
+  transition:
+    border-color 0.3s var(--ease),
+    transform 0.3s var(--ease);
+}
+
+.cardUnlocked:hover {
+  border-color: var(--line-gold);
+  transform: translateY(-3px);
+}
+
+.cardLocked {
+  opacity: 0.82;
+}
+
+.iconWrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 18px;
+  border-radius: var(--r);
+  border: 1px solid var(--line-gold);
+  background: color-mix(in srgb, var(--gold) 8%, transparent);
+  color: var(--gold-bright);
+}
+
+/* black-and-white until earned — the shape still reads, the color doesn't. */
+.iconLocked {
+  filter: grayscale(1);
+  color: var(--ink-faint);
+  border-color: var(--line);
+  background: var(--panel-2);
+}
+
+.name {
+  font-size: 1.25rem;
+}
+
+.desc {
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-mute);
+}
+
+.reward {
+  margin-top: 14px;
+  font: 600 12px/1.4 var(--f-sans);
+  color: var(--gold);
+}
+
+.cardLocked .reward {
+  color: var(--ink-faint);
+}
+
+.status {
+  margin-top: auto;
+  padding-top: 18px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.statusUnlocked {
+  color: var(--ok-bright);
+}

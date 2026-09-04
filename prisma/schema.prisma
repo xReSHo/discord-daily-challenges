@@ -143,7 +143,28 @@ model SuspiciousAttempt {
   @@index([discordId, createdAt])
 }
 
-// --- Weekly boss raid (Veyrath) ---
+// --- Weekly boss raid ---
+
+/// The roster of possible bosses. One is picked at random for each weekly spawn
+/// (never the same boss two weeks running). Edited from /admin/boss. `params`
+/// holds mechanic-specific knobs (dmgPerClick/maxCps for the clicker, the
+/// eclipse cycle, the sac schedule, the mini-arena tuning). Both the stats and
+/// `params` are snapshotted onto the Boss row at spawn so a later roster edit
+/// never retro-changes a running fight or a past payout.
+model BossTemplate {
+  key        String   @id // "veyrath" | "grieveth" | "nyrrek" | "silt-cardinal" | "unraveled-saint"
+  name       String
+  mechanic   String   @default("clicker") // "clicker" | "eclipse" | "weakpoint" | "miniarena"
+  enabled    Boolean  @default(true)
+  maxHp      Int
+  rewardPool Int
+  penalty    Int
+  image      String // "/boss/grieveth-idle" — .webp + .png siblings under public/
+  blurb      String // one-line "how to fight" for the bot spawn embed + the arena
+  params     Json     @default("{}")
+  sortOrder  Int      @default(0)
+  updatedAt  DateTime @updatedAt
+}
 
 /// One row per weekly boss (keyed by the Saturday it spawned). `dealtDamage`
 /// is the denormalised running total across all fighters, so "is it dead?" is
@@ -158,9 +179,16 @@ model Boss {
   /// by the code on create; nullable only so `db push` tolerates old rows.
   dedupeKey   String?   @unique
   source      String    @default("weekly") // "weekly" | "manual"
-  /// Params are snapshotted at spawn so editing BossConfig later never
+  /// The BossTemplate this was spawned from (null for legacy / bespoke spawns).
+  templateKey String?
+  /// Params are snapshotted at spawn so editing the roster later never
   /// retro-changes a running fight or a past payout.
   name        String    @default("Veyrath, The Hollow Sovereign")
+  mechanic    String    @default("clicker")
+  /// Snapshot of the template's `params` at spawn (mechanic knobs).
+  params      Json?
+  image       String    @default("/boss/veyrath-idle")
+  blurb       String    @default("")
   maxHp       Int
   rewardPool  Int       @default(10000)
   penalty     Int       @default(2000)
@@ -182,9 +210,10 @@ model Boss {
   @@index([spawnsAt, expiresAt])
 }
 
-/// Singleton (`id = "singleton"`) holding the recurring boss params + weekly
-/// spawn window. Edited from /admin/boss. Absent / unset fields fall back to
-/// the env defaults in src/lib/boss/config.ts.
+/// Singleton (`id = "singleton"`) holding the weekly spawn window + global
+/// switch. Edited from /admin/boss. The per-boss stat fields are legacy (the
+/// roster owns those now) and fall back to the env defaults in
+/// src/lib/boss/config.ts.
 model BossConfig {
   id            String   @id @default("singleton")
   name          String
@@ -202,7 +231,8 @@ model BossConfig {
 }
 
 /// One row per (boss, fighter). `damage` drives the bounty split; `settled`
-/// marks that the reward or penalty for this fighter has been paid.
+/// marks that the reward or penalty for this fighter has been paid. `meta`
+/// carries per-fighter mechanic state (miss streak, mini-run cooldown, …).
 model BossHit {
   id        String   @id @default(cuid())
   bossId    String
@@ -210,6 +240,7 @@ model BossHit {
   discordId String
   damage    Float    @default(0)
   clicks    Int      @default(0)
+  meta      Json?
   lastHitAt DateTime @default(now())
   settled   Boolean  @default(false)
   payout    Int      @default(0)
@@ -362,4 +393,36 @@ model ChatIncident {
 
   @@index([createdAt])
   @@index([notified])
+}
+
+// --- Achievements ---
+
+/// One row per (user, achievement) unlock. The catalog itself (name, icon,
+/// description, reward) lives in code at src/lib/achievements/catalog.ts — this
+/// table is only unlock state. `seenAt` gates the unlock popup: null until the
+/// toast has shown it once. `rewardGranted` tracks whether the reward side-effect
+/// (coin payout / Discord role grant) actually landed; false rows are retried
+/// opportunistically the next time this user's achievements are evaluated.
+model Achievement {
+  id            String    @id @default(cuid())
+  discordId     String
+  key           String
+  unlockedAt    DateTime  @default(now())
+  seenAt        DateTime?
+  rewardGranted Boolean   @default(false)
+
+  @@unique([discordId, key])
+  @@index([discordId, seenAt])
+}
+
+// --- Admin game kill-switch ---
+
+/// One row per game section that an admin has touched. Absent row = enabled.
+/// `disabled` takes the game offline (page shows a notice, mutating APIs 503);
+/// `note` is the player-facing reason.
+model SectionStatus {
+  section   String   @id // wordle | typing | aim | litany | geodash
+  disabled  Boolean  @default(false)
+  note      String?
+  updatedAt DateTime @updatedAt
 }

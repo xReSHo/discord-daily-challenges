@@ -20,6 +20,8 @@ import { addCurrency } from "@/lib/unbelievaboat";
 import { getChallengeDate } from "@/lib/challenge-date";
 import { isDevMode } from "@/lib/dev-mode";
 import { SECTIONS, SECTION_IDS, type SectionId } from "@/lib/sections";
+import { evaluateAchievements, getActiveBoostPercent } from "@/lib/achievements/engine";
+import { logger } from "@/lib/logger";
 
 export type CompleteResult =
   | { status: "rewarded"; amount: number; newBalance: number }
@@ -39,10 +41,15 @@ export async function completeSection(
   if (await isDevMode(discordId)) return { status: "dev_mode" };
 
   const section = SECTIONS[sectionId];
-  const reward =
+  const base =
     rewardAmount != null && Number.isFinite(rewardAmount)
       ? Math.max(0, Math.floor(rewardAmount))
       : section.reward;
+  // A permanent achievement (e.g. "Unbroken Week") can boost every future
+  // daily-trial reward by a fixed percent — never the boss bounty or
+  // geodash's staked payout, which pay out through their own paths.
+  const boostPct = base > 0 ? await getActiveBoostPercent(discordId) : 0;
+  const reward = boostPct > 0 ? Math.floor(base * (1 + boostPct / 100)) : base;
   const date = getChallengeDate();
   const key = {
     discordId_section_date: { discordId, section: sectionId, date },
@@ -85,6 +92,9 @@ export async function completeSection(
       where: key,
       data: { rewarded: true },
     });
+    evaluateAchievements(discordId).catch((err) =>
+      logger.error("achievements.eval_call_failed", { discordId, message: String(err) }),
+    );
     return { status: "rewarded", amount: reward, newBalance };
   } catch (err) {
     await prisma.completion.deleteMany({
