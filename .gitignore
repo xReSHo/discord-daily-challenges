@@ -30,3 +30,7 @@ yarn-debug.log*
 yarn-error.log*
 .vercel
 .netlify
+
+# assistant instructions: kept locally, not published
+CLAUDE.md
+AGENTS.md
