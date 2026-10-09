@@ -26,6 +26,13 @@ export const PASSIVE_IDS = [
   "saints-hourglass",
 ] as const;
 
+/**
+ * Carried, but never armed by a strike: it stays in the pack through the raid
+ * and is used up only if the boss survives, when the raid is settled. Whoever
+ * holds one is covered, whether they fought or not.
+ */
+export const WARDING_CHARM = "warding-charm";
+
 /** Gear that is used from the arena, when the fighter chooses. */
 export const USABLE_IDS = [
   "flask-of-fury",

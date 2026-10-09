@@ -77,6 +77,7 @@ import {
   lured,
   resting,
   type Kit,
+  WARDING_CHARM,
 } from "./kit-rules";
 
 export type { BossState, BossLeader, HitResponse } from "./types";
@@ -1338,16 +1339,21 @@ export async function resolveBoss(bossId?: string): Promise<ResolveResult> {
   let unsettled = 0;
   let penalized = 0;
 
-  // a Warding Charm left in the pack still does its work for someone who never
-  // entered the arena: it is used up here
-  if (everyone) {
+  // who is covered by a Warding Charm, and who swore a Blood Pact (a failed raid only)
+  const marks = boss.slain || pending.length === 0 ? null : await raidMarks(boss.id);
+
+  // A Warding Charm triggers by itself when the boss survives: it is taken
+  // from the pack here, for those who fought and those who never came alike.
+  if (marks && boss.paysOut) {
     for (const h of pending) {
-      if (h.clicks === 0) await spendFromPack(h.discordId, "warding-charm", boss.id, Date.now());
+      const mark = marks.get(h.discordId);
+      if (mark?.ward) continue;
+      if (await spendFromPack(h.discordId, WARDING_CHARM, boss.id, Date.now())) {
+        marks.set(h.discordId, { ward: true, pact: mark?.pact ?? false });
+        bustKit(boss.id, h.discordId);
+      }
     }
   }
-
-  // who carried a Warding Charm, and who swore a Blood Pact (a failed raid only)
-  const marks = boss.slain || pending.length === 0 ? null : await raidMarks(boss.id);
 
   for (let i = 0; i < pending.length; i++) {
     const h = pending[i];

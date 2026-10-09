@@ -124,9 +124,11 @@ export const GEAR: Gear[] = [
     id: "warding-charm",
     name: "Warding Charm",
     stat: "No penalty",
-    effect: "If the boss survives, you lose nothing. Used up by that raid, even if you never entered it.",
+    effect:
+      "If the boss survives, the charm breaks by itself and you lose nothing, whether you fought or not. If the boss is slain, you keep it for the next raid.",
     price: 2000,
-    stock: null,
+    stock: 3,
+    restock: "weekly",
   },
   {
     ...RAID,

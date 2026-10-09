@@ -29,6 +29,7 @@ import {
   USE_GAP_MS,
   gearApplies,
   type Kit,
+  WARDING_CHARM,
 } from "./kit-rules";
 
 export type KitBoss = {
@@ -128,8 +129,11 @@ async function readKit(boss: KitBoss, discordId: string, arm: boolean): Promise<
   }
   if (waiting.size > 0) {
     if (arm) {
+      // the Warding Charm is shown as at work but stays in the pack: it is
+      // only used up if the boss survives (see resolveBoss)
+      const toArm = [...waiting].filter(([id]) => id !== WARDING_CHARM).map(([, row]) => row);
       const armed = await prisma.purchase.updateMany({
-        where: { id: { in: [...waiting.values()] }, status: "fulfilled" },
+        where: { id: { in: toArm }, status: "fulfilled" },
         data: { status: "used", roleId: raidTag(boss.id, now) },
       });
       v += armed.count;
