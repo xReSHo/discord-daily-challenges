@@ -323,9 +323,10 @@ async function computeSnapshot(viewerIsAdmin: boolean): Promise<SharedSnapshot> 
   }
 
   const [participants, hits] = await Promise.all([
-    prisma.bossHit.count({ where: { bossId: row.id } }),
+    // only those who struck: a settled raid also holds a row for everyone else
+    prisma.bossHit.count({ where: { bossId: row.id, clicks: { gt: 0 } } }),
     prisma.bossHit.findMany({
-      where: { bossId: row.id },
+      where: { bossId: row.id, clicks: { gt: 0 } },
       orderBy: { damage: "desc" },
       take: TOP_N,
       select: { discordId: true, damage: true },
@@ -1267,13 +1268,33 @@ export type ResolveResult = {
   weekOf?: string;
   bossName: string;
   paid: boolean;
+  /** who struck the boss */
   participants: number;
+  /** who was charged by this call for a boss that got away, fighters or not */
+  penalized: number;
   totalPaid: number;
   penaltyEach: number;
   rewardPool: number;
   top: { name: string; damage: number; payout: number }[];
   unsettled: number;
 };
+
+/**
+ * Give every player who did not fight a row in this raid, so the penalty for a
+ * boss that got away is claimed and charged for them exactly as for a fighter.
+ * Only players who had signed in before the raid closed.
+ */
+async function enlistBystanders(boss: { id: string; expiresAt: Date }): Promise<void> {
+  const players = await prisma.user.findMany({
+    where: { discordId: { not: null }, createdAt: { lte: boss.expiresAt } },
+    select: { discordId: true },
+  });
+  if (players.length === 0) return;
+  await prisma.bossHit.createMany({
+    data: players.map((p) => ({ bossId: boss.id, discordId: p.discordId!, damage: 0, clicks: 0 })),
+    skipDuplicates: true,
+  });
+}
 
 export async function resolveBoss(bossId?: string): Promise<ResolveResult> {
   const now = new Date();
@@ -1291,6 +1312,7 @@ export async function resolveBoss(bossId?: string): Promise<ResolveResult> {
       bossName: boss?.name ?? cfg.name,
       paid: true,
       participants: 0,
+      penalized: 0,
       totalPaid: 0,
       penaltyEach: capPenalty(boss?.penalty ?? cfg.penalty),
       rewardPool: boss?.rewardPool ?? cfg.rewardPool,
@@ -1299,15 +1321,30 @@ export async function resolveBoss(bossId?: string): Promise<ResolveResult> {
     };
   }
 
-  const allHits = await prisma.bossHit.findMany({
-    where: { bossId: boss.id, clicks: { gt: 0 } },
+  // A boss that got away costs every player, whether they fought or not. A
+  // test raid (admins only, or one that moves no coins) stays with its fighters.
+  const everyone = !boss.slain && !boss.adminOnly && boss.paysOut;
+  if (everyone) await enlistBystanders(boss);
+
+  const rows = await prisma.bossHit.findMany({
+    where: { bossId: boss.id },
     orderBy: { damage: "desc" },
   });
+  const allHits = rows.filter((h) => h.clicks > 0);
   const totalDamage = allHits.reduce((a, h) => a + h.damage, 0) || 1;
-  const pending = allHits.filter((h) => !h.settled);
+  const pending = (everyone ? rows : allHits).filter((h) => !h.settled);
 
   let totalPaid = 0;
   let unsettled = 0;
+  let penalized = 0;
+
+  // a Warding Charm left in the pack still does its work for someone who never
+  // entered the arena: it is used up here
+  if (everyone) {
+    for (const h of pending) {
+      if (h.clicks === 0) await spendFromPack(h.discordId, "warding-charm", boss.id, Date.now());
+    }
+  }
 
   // who carried a Warding Charm, and who swore a Blood Pact (a failed raid only)
   const marks = boss.slain || pending.length === 0 ? null : await raidMarks(boss.id);
@@ -1360,7 +1397,22 @@ export async function resolveBoss(bossId?: string): Promise<ResolveResult> {
     try {
       if (boss.paysOut && amount !== 0) await addCurrency(h.discordId, amount, reason, target);
       totalPaid += Math.abs(amount);
+      if (amount < 0) penalized++;
     } catch (err) {
+      // someone who never fought and whom the coin store refuses outright (they
+      // have left the server, say) is let go, so one such player cannot hold the
+      // whole raid unsettled. Anything else is tried again.
+      if (h.clicks === 0 && /failed: 4(?!29)\d\d/.test(String(err))) {
+        await prisma.bossHit
+          .updateMany({ where: { id: h.id }, data: { payout: 0 } })
+          .catch(() => {});
+        logger.warn("boss.bystander_skipped", {
+          bossId: boss.id,
+          discordId: h.discordId,
+          message: String(err),
+        });
+        continue;
+      }
       await prisma.bossHit
         .updateMany({ where: { id: h.id }, data: { settled: false, payout: 0 } })
         .catch(() => {});
@@ -1396,6 +1448,7 @@ export async function resolveBoss(bossId?: string): Promise<ResolveResult> {
     bossName: boss.name,
     paid: boss.paysOut,
     participants: allHits.length,
+    penalized,
     totalPaid,
     penaltyEach: capPenalty(boss.penalty),
     rewardPool: boss.rewardPool,

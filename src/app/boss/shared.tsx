@@ -149,7 +149,7 @@ export function Stage({
               <Coins size={13} /> <b>{state.rewardPool.toLocaleString("en-US")}</b> bounty, split by damage
             </span>
             <span>
-              <Skull size={13} /> lose <b>{state.penaltyEach.toLocaleString("en-US")}</b> if you fight and fail
+              <Skull size={13} /> every player loses <b>{state.penaltyEach.toLocaleString("en-US")}</b> if it survives
             </span>
           </p>
         </footer>
@@ -237,6 +237,13 @@ export function AdminBar({ show, active }: { show: boolean; active: boolean }) {
 
 /** How the raid ended for the viewer, as one line. */
 export function Outcome({ state }: { state: BossState }) {
+  if (state.yourPayout !== null && state.yourPayout < 0) {
+    return (
+      <p className={`${styles.sub} ${styles.lost}`}>
+        {state.yourPayout.toLocaleString("en-US")} coins — {state.name} lived, and every player pays.
+      </p>
+    );
+  }
   if (state.yourDamage <= 0) {
     return <p className={styles.sub}>You didn&apos;t join this fight.</p>;
   }
@@ -247,16 +254,9 @@ export function Outcome({ state }: { state: BossState }) {
       </p>
     );
   }
-  if (state.yourPayout >= 0) {
-    return (
-      <p className={`${styles.sub} ${styles.won}`}>
-        <Coins size={14} /> +{state.yourPayout.toLocaleString("en-US")} coins for {fmtDamage(state.yourDamage)} damage.
-      </p>
-    );
-  }
   return (
-    <p className={`${styles.sub} ${styles.lost}`}>
-      {state.yourPayout.toLocaleString("en-US")} coins — you fought and {state.name} lived.
+    <p className={`${styles.sub} ${styles.won}`}>
+      <Coins size={14} /> +{state.yourPayout.toLocaleString("en-US")} coins for {fmtDamage(state.yourDamage)} damage.
     </p>
   );
 }

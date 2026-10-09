@@ -169,8 +169,8 @@ async function RaidBanner({ discordId }: { discordId: string | undefined }) {
             "admins only"
           ) : (
             <>
-              fell it for a share of <b>{boss.rewardPool.toLocaleString("en-US")}</b> — fight and fail and you
-              lose <em>{boss.penaltyEach.toLocaleString("en-US")}</em>
+              fell it for a share of <b>{boss.rewardPool.toLocaleString("en-US")}</b> — if it survives, every
+              player loses <em>{boss.penaltyEach.toLocaleString("en-US")}</em>
             </>
           )}
         </span>

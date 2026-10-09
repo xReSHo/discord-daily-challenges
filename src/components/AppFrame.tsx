@@ -43,7 +43,7 @@ async function RaidAlert({ discordId }: { discordId: string }) {
           {Math.ceil(raid.hpLeft * 100)}% health · {raidTimeLeft(raid.expiresAt)} left
           {raid.adminOnly
             ? " · test raid, admins only"
-            : ` · fight and fail: −${raid.penaltyEach.toLocaleString("en-US")}`}
+            : ` · if it survives, everyone loses ${raid.penaltyEach.toLocaleString("en-US")}`}
         </span>
       </span>
       <span className={styles.raidGo}>

@@ -34,7 +34,7 @@ export type BossConfig = {
   weeklyEnabled: boolean;
 };
 
-/** The most a failed raid may ever cost one fighter, whatever a boss is set
+/** The most a failed raid may ever cost one player, whatever a boss is set
  *  to. A boss's own penalty sits under this, scaled to how hard it is. */
 export const MAX_BOSS_PENALTY = 5000;
 

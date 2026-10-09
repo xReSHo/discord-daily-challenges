@@ -124,7 +124,7 @@ export const GEAR: Gear[] = [
     id: "warding-charm",
     name: "Warding Charm",
     stat: "No penalty",
-    effect: "If the boss survives, you lose nothing.",
+    effect: "If the boss survives, you lose nothing. Used up by that raid, even if you never entered it.",
     price: 2000,
     stock: null,
   },

@@ -244,7 +244,7 @@ export default async function AdminBossPage({
       SELECT b.id, b.name, b.mechanic, b.source, b."spawnsAt", b."expiresAt",
         b."maxHp", b."dealtDamage", b."rewardPool", b.penalty,
         b."adminOnly", b."paysOut", b.resolved, b.slain,
-        (SELECT count(*)::int FROM "BossHit" h WHERE h."bossId" = b.id) AS hits
+        (SELECT count(*)::int FROM "BossHit" h WHERE h."bossId" = b.id AND h.clicks > 0) AS hits
       FROM "Boss" b ORDER BY b.resolved ASC, b."spawnsAt" DESC LIMIT 14`,
   });
   const cfg = bossConfigFromRow(data.cfg[0] as Partial<BossConfig> | undefined);
@@ -353,7 +353,7 @@ export default async function AdminBossPage({
                       busy="Settling…"
                       confirm={
                         b.paysOut
-                          ? "End this raid now and settle it? Real coins will be paid out or taken from everyone who fought."
+                          ? "End this raid now and settle it? Real coins will be paid to those who fought, or taken from every player if it survived."
                           : "End this raid now and settle it? No real coins move for this one."
                       }
                     >

@@ -48,7 +48,7 @@ Each trial can be won once per player per day, and resets at midnight in the tim
 
 ### The weekly raid
 
-One boss is drawn from the roster each week, never the same one twice running. Every fighter's damage is counted; if the boss falls, the bounty is split by damage, and if it survives, everyone who fought pays a penalty.
+One boss is drawn from the roster each week, never the same one twice running. Every fighter's damage is counted; if the boss falls, the bounty is split by damage, and if it survives, every player pays a penalty, whether they fought or not.
 
 <p align="center">
   <img src="docs/media/bosses.webp" width="100%" alt="The five raid bosses" />
