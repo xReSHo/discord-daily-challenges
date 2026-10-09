@@ -1,154 +1,217 @@
-# Daily Challenge
+<div align="center">
 
-A self-hosted web application that runs a set of daily skill-based games for a Discord community. Players sign in with their Discord account, play that day's challenges once each, and build up streaks, personal bests, and (optionally) in-server currency over time. A weekly boss event and a small achievement system run alongside the daily games, and an admin panel gives the server owner visibility into activity, payouts, and flagged attempts.
+<img src="src/app/icon.png" width="72" alt="" />
 
-The project is a Next.js application backed by a PostgreSQL database. Discord is used for sign-in and, optionally, for paying out rewards and granting roles; the games themselves run entirely on the website, not inside Discord.
+# Daily Challenges
 
-## Overview
+**One grace per day. Face the trial, claim the reward.**
 
-Each day, at a configurable reset time, a new round of challenges becomes available to every signed-in player: a daily word-guessing game, a typing speed test, an aim/reaction trainer, a memory sequence game, and a staked, difficulty-based run through an obstacle course. Each one can be completed once per player per day. Completing a challenge for the first time that day can pay out a coin reward through an external currency integration (UnbelievaBoat), if one is configured.
+A self-hosted website of daily skill trials, a weekly raid and a coin economy for a Discord community.
 
-On top of the daily games, the site runs a recurring weekly boss encounter shared by the whole server, tracks per-player streaks on a public leaderboard, and awards a small set of one-time achievements for specific milestones. A restricted admin panel covers completion activity, payouts, anti-cheat flags, support submissions, and per-game on/off switches.
+[Live site](https://discord-daily-challenges.vercel.app) · [Features](#features) · [Setup](#setup) · [How it works](#how-it-works)
 
-Built with:
-- Next.js (App Router) and TypeScript
-- NextAuth, using Discord as the sign-in provider
-- Prisma and PostgreSQL
-- UnbelievaBoat's API for the optional currency integration
+<br />
+
+<img src="docs/media/trailer.webp" width="820" alt="A half-minute tour of the site: the landing page, the day's trials, Wordle, the five raid bosses, the shop, the Pit, achievements and a player's equipment." />
+
+</div>
+
+## What it is
+
+Players sign in with Discord and get the same set of trials as everyone else in the server, once a day. Winning pays coins through [UnbelievaBoat](https://unbelievaboat.com), keeps a streak going, and can drop a piece of equipment. Once a week the whole server fights one boss together. Coins are spent in the shop, or staked against other players in the Pit.
+
+The games run entirely on the website. Discord is used for sign-in, and optionally for paying coins and granting roles.
+
+<p align="center">
+  <img src="docs/media/landing.webp" width="49%" alt="The landing page" />
+  <img src="docs/media/trials.webp" width="49%" alt="The day's trials, two bested and one lost" />
+</p>
 
 ## Features
 
-- Five daily challenges, each completable once per calendar day per player:
-  - A word-guessing game with a fixed number of guesses, using the same word for every player on a given day.
-  - A timed typing test, scored on speed and accuracy, with a mistake limit.
-  - A reaction/aim trainer where the player clears a set of targets before time runs out.
-  - A memory sequence game where each round adds one step to a growing pattern; a player can bank an early reward or keep going for a larger one at the risk of losing it.
-  - A staked, auto-running obstacle course with selectable difficulty tiers, each with its own entry cost and payout.
-- A weekly boss event: one boss is drawn at random from a configurable roster each week (never repeating the previous week's pick), each with a different fight mechanic. Damage is tracked per player, and the reward pool is split by contribution when the boss is defeated; a penalty applies to participants if it survives its time window instead.
-- An achievement system: a small, code-defined set of one-time achievements (first completion, a full week of perfect days, a high score on a specific game, taking part in a boss kill, clearing every challenge in a single day), each paying a coin bonus, a permanent reward multiplier, or a Discord role. A short on-screen notice appears the first time a player earns one.
-- Streaks and a leaderboard: consecutive days of clearing every challenge are tracked per player and ranked publicly.
-- A personal stats page with streak history, a completion heatmap, and per-game personal bests.
-- A configurable shop where players can spend earned coins on Discord roles, including time-limited passes.
-- Bug reports and suggestions, sent through the Discord bot's `/report` command and listed in the admin panel.
-- Rate limiting and anti-cheat checks on every scored action, with flagged attempts logged for review rather than silently rejected.
-- An admin panel, restricted to a configurable list of Discord user IDs, covering activity, payouts, flagged attempts, support submissions, and per-game on/off switches.
-- A dev mode toggle for admin accounts that removes the daily cooldown for testing, without recording results or paying out rewards.
+### Daily trials
 
-## Setup / Installation
+Each trial can be won once per player per day, and resets at midnight in the timezone you choose. An admin can switch any of them on or off.
+
+| Trial | How it is played |
+| --- | --- |
+| **Wordle** | Six guesses at a five-letter word. The same word for everyone that day. |
+| **Typing Test** | A paragraph against the clock, with a floor on speed and a limit on mistakes. |
+| **Aim Trainer** | Moving targets to clear before the time runs out. |
+| **The Litany** | A growing sequence to remember. Bank the prize early, or go on for more and risk it. |
+| **The Braziers** | A Lights Out puzzle: light the whole hall in as few touches as you can. |
+| **Geometry Dash** | A staked auto-runner with difficulty tiers, each with its own entry cost and payout. |
+
+<p align="center">
+  <img src="docs/media/wordle.webp" width="70%" alt="A Wordle board solved in two guesses" />
+</p>
+
+### The weekly raid
+
+One boss is drawn from the roster each week, never the same one twice running. Every fighter's damage is counted; if the boss falls, the bounty is split by damage, and if it survives, everyone who fought pays a penalty.
+
+<p align="center">
+  <img src="docs/media/bosses.webp" width="100%" alt="The five raid bosses" />
+</p>
+
+Each boss is fought differently and rewards a different habit:
+
+| Boss | The fight | What it rewards |
+| --- | --- | --- |
+| **Veyrath** | A click race | Striking fast without stopping |
+| **Grieveth** | A click race | Stopping to draw breath, then landing heavy blows |
+| **Nyrrek** | An eclipse that opens and closes | Striking in the dark, never in the light |
+| **The Silt Cardinal** | Growths that surface around it | Lancing them in a row without a miss |
+| **The Unraveled Saint** | Short trials of typing, aim and memory | Never repeating either of your last two |
+
+### The shop, gear and equipment
+
+<p align="center">
+  <img src="docs/media/shop.webp" width="49%" alt="Raid gear on the merchant's shelves" />
+  <img src="docs/media/me.webp" width="49%" alt="A player's equipment and armoury" />
+</p>
+
+- **Raid gear** is carried into a raid and used up by it: more damage, a faster hand, a penalty waived.
+- **Boss-bane gear** works against one boss each.
+- **Consumables** are used from the arena in the middle of a fight, three to a raid.
+- **Trial charms** give a second try at a lost trial, reveal a Wordle letter, or cover a missed day's streak.
+- **Equipment** is found, not bought: thirty pieces across six slots and five rarities, dropped by trials and slain bosses. The best piece in each slot is worn automatically.
+- **The Reliquary** is a crate that can hold any piece of equipment, or nothing.
+- **Discord roles**, permanent or timed, can be sold for coins.
+
+### The Pit
+
+A wagered duel. Both players choose five moves in secret and stake the same amount; the moves are played against each other and the first to three rounds takes the pot. Players can challenge each other or the house champion, and climb a rank ladder.
+
+<p align="center">
+  <img src="docs/media/pit.webp" width="49%" alt="The Pit: ranks, stakes and open challenges" />
+  <img src="docs/media/feats.webp" width="49%" alt="The achievements page" />
+</p>
+
+### Progress
+
+- **Streaks** count consecutive days on which every trial was won, and are ranked on a public leaderboard.
+- **Achievements** are one-time feats that pay coins, a permanent reward boost or a Discord role. Anything earned but not yet delivered is settled the next time the player loads a page.
+- **A personal record page** shows streak history, a completion calendar, personal bests, equipment and the pack.
+
+### For the server owner
+
+- **Admin panel** for activity, payouts, flagged attempts and support reports, with tabs to tune the games, the shop, the Pit, equipment drops, achievements and the raid roster. Changes apply without a redeploy.
+- **Three-step admin access:** a listed Discord account, a password and an authenticator code.
+- **Anti-cheat on every scored action.** Scores are worked out on the server, never trusted from the browser, and suspicious attempts are logged for review.
+- **Rate limiting** on sign-in, play, purchases and the raid.
+- **Dev mode** lets an admin replay the trials without recording results or paying coins.
+
+## Built with
+
+| | |
+| --- | --- |
+| Framework | Next.js 16 (App Router), React 19, TypeScript |
+| Sign-in | Auth.js with Discord |
+| Database | PostgreSQL through Prisma |
+| Economy | UnbelievaBoat API (optional) |
+| Styling | CSS modules; artwork served as WebP; sound effects generated in the browser, no audio files |
+
+## Setup
 
 ### Prerequisites
 
 - Node.js 20 or later
-- A PostgreSQL database (any host works; a free tier from a provider such as Supabase or Neon is sufficient to start)
-- A Discord application, for sign-in (see step 1)
-- Optional: a Discord bot token and an UnbelievaBoat account, if you want coin rewards and role grants to work
+- A PostgreSQL database (a free tier from Supabase or Neon is enough to start)
+- A Discord application, for sign-in
+- Optional: a Discord bot token and an UnbelievaBoat application, for coin rewards and role grants
 
 ### 1. Create a Discord application
 
-1. Open the Discord Developer Portal and create a new application.
-2. Under OAuth2 > General, copy the Client ID and Client Secret.
-3. Under OAuth2 > Redirects, add:
+1. In the [Discord Developer Portal](https://discord.com/developers/applications), create an application.
+2. Under **OAuth2**, copy the Client ID and Client Secret.
+3. Under **OAuth2 → Redirects**, add the address the site will sign in through. The path must be exact:
    - `http://localhost:3000/api/auth/callback/discord` for local development
-   - `https://yourdomain.com/api/auth/callback/discord` once you have a production URL
-4. If you want the site to grant Discord roles (shop purchases, the achievement role reward), add a bot user to the same application and note its token. When you invite the bot to your server, grant it the "Manage Roles" permission and place its role above any role it will be asked to grant.
+   - `https://your-domain/api/auth/callback/discord` for production
+4. To let the site grant roles, add a bot to the application, invite it with **Manage Roles**, and place its role above every role it will grant.
 
-### 2. Install dependencies
+### 2. Install
 
 ```bash
+git clone https://github.com/xReSHo/discord-daily-challenges.git
+cd discord-daily-challenges
 npm install
 ```
 
-### 3. Set up a database
-
-Create a PostgreSQL database with any provider. You will need two connection strings: a pooled connection for normal queries and a direct (non-pooled) one for schema changes. Most managed Postgres providers expose both.
-
-### 4. Configure environment variables
+### 3. Configure
 
 ```bash
 cp .env.example .env
 ```
 
-Fill in `.env`. At minimum:
+At minimum:
 
 | Variable | Purpose |
 | --- | --- |
 | `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | From step 1 |
-| `AUTH_SECRET` | Session signing secret; generate with `npx auth secret` |
-| `DATABASE_URL`, `DIRECT_URL` | From step 3 |
-| `NEXTAUTH_URL` | The site's own URL (`http://localhost:3000` locally) |
+| `AUTH_SECRET` | Session signing secret. Generate one with `npx auth secret` |
+| `NEXTAUTH_URL` | The site's own address (`http://localhost:3000` locally) |
+| `DATABASE_URL`, `DIRECT_URL` | A pooled connection for queries and a direct one for schema changes |
 
-Optional, for the features that depend on them:
+For the optional parts:
 
 | Variable | Enables |
 | --- | --- |
-| `UNBELIEVABOAT_API_TOKEN`, `UNBELIEVABOAT_GUILD_ID` | Coin rewards for completing challenges and achievements |
-| `DISCORD_BOT_TOKEN`, `DISCORD_GUILD_ID` | Role grants from the shop and from achievements |
-| `ADMIN_DISCORD_IDS` | Comma-separated Discord user IDs allowed to open the admin panel |
-| `BOSS_RESOLVE_SECRET` | Shared secret used to authorize an external process settling the weekly boss (see "Weekly boss" below) |
+| `UNBELIEVABOAT_API_TOKEN`, `UNBELIEVABOAT_GUILD_ID` | Coin rewards, the shop, the Pit and raid payouts |
+| `DISCORD_BOT_TOKEN`, `DISCORD_GUILD_ID` | Role grants from the shop and achievements |
+| `ADMIN_DISCORD_IDS` | Comma-separated Discord user IDs allowed into the admin panel |
+| `ADMIN_SETUP_KEY` | One-time key for enrolling the admin password and authenticator |
+| `BOSS_RESOLVE_SECRET`, `SHOP_FULFILL_SECRET`, `FEEDBACK_SECRET` | Shared secrets for a companion Discord bot |
 
-The full list, including per-game reward amounts, rate limits, and the boss schedule, is documented with comments in `.env.example`. Every optional integration degrades gracefully when unset: the site still runs, it just skips that feature.
+Every variable is documented in `.env.example`. Each optional integration degrades gracefully when unset: the site still runs and skips that feature.
 
-### 5. Set up the database schema
+### 4. Create the database schema
 
 ```bash
-npx prisma generate
 npx prisma db push
+node scripts/seed-boss-roster.mjs   # the five raid bosses
 ```
 
-### 6. Run it
-
-Development:
+### 5. Run
 
 ```bash
-npm run dev
+npm run dev                      # development, http://localhost:3000
+npm run build && npm run start   # production
 ```
 
-Production:
+### 6. Enrol the admin
+
+Sign in with an account listed in `ADMIN_DISCORD_IDS`, open `/admin/setup`, and enter `ADMIN_SETUP_KEY` to set a password and pair an authenticator app. `node scripts/admin-reset.mjs` clears the enrolment if you lose either.
+
+### Deploying
+
+The site runs on any host that serves a Next.js app. On Vercel, import the repository and add the environment variables; `vercel.json` pins the functions to one region.
+
+- **Keep the host and the database in the same region.** Every request makes several queries, and cross-region latency is paid on each one.
+- **Mind the connection limit.** On a serverless host each instance holds its own connection. The example `DATABASE_URL` pins an instance to one connection so a small pooler is not exhausted.
+- **Environment changes need a redeploy** to take effect.
+
+## How it works
+
+- **One reward per day, enforced by the database.** A completion row is claimed under a unique constraint before any coins move, so two requests can never both pay out, and a failed payout releases the claim.
+- **The server decides every result.** Daily content is derived from a secret seed and the date. The browser sends what the player did; the server replays it and scores it.
+- **The raid settles itself.** When a boss's window closes, the next request to the site settles the payout or the penalty. A companion bot can also call `POST /api/boss/resolve` with `Authorization: Bearer <BOSS_RESOLVE_SECRET>` to settle it on time and announce the result.
+- **Work after the response.** Achievement checks run after the reply has been sent, using the host's keep-alive hook, so a player never waits on them and a serverless host does not cut them off.
+
+### Offline checks
+
+The rules that move coins are covered by scripts that need no database:
 
 ```bash
-npm run build
-npm run start
+node --experimental-strip-types --import ./scripts/ts-esm-hook.mjs scripts/verify-raid-gear.mts
 ```
 
-The site listens on port 3000 by default.
+The same command runs `verify-equipment.mts`, `verify-braziers.mts`, `verify-geodash.mts`, `verify-perfect-days.mts` and `verify-admin-crypto.mts`.
 
-### Notes on hosting
+## Companion bot
 
-If you deploy on a serverless platform with a database connection pooler (for example, Supabase's free tier), be aware of its connection limit; the default `.env.example` values pin each function instance to a single connection to stay under typical free-tier caps. If you expect steady traffic, running the app as a long-lived process (rather than serverless functions) keeps one warm connection pool and avoids cold starts. Also keep your database and your host in the same region where possible; cross-region queries add noticeable latency to every request.
-
-## How to Use
-
-This project is a website, not a Discord bot with slash or prefix commands. There are no commands to register or invoke; once the site is running, its full feature set is reachable from the browser after a player signs in with Discord.
-
-### Adding it to your server
-
-1. Deploy the site following the setup steps above, either for local testing or to a production host (any platform that runs a Node.js server or a Next.js app works).
-2. Share the site's URL with your community, for example by pinning it in a channel.
-3. Members sign in using the "Enter with Discord" button on the landing page. No separate account or registration step is needed.
-
-### Playing the daily challenges
-
-- The dashboard lists all five games and shows, for each one, whether it is open, already completed for the day, or locked out after too many failed attempts.
-- Challenges reset once every 24 hours, at midnight in the timezone set by `CHALLENGE_TZ` in `.env`.
-- A player's streak, personal bests, and completion history are visible on their own stats page and, for streaks, on the public leaderboard.
-
-### Weekly boss
-
-- One boss is drawn at random from the roster each week and is active for a fixed window, configured with the `BOSS_SPAWN_DOW`, `BOSS_SPAWN_HOUR`, `BOSS_DESPAWN_HOUR`, and `BOSS_DESPAWN_MIN` variables.
-- Players deal damage from the boss's page on the site while it is active.
-- When the window closes, something needs to call `POST /api/boss/resolve` with the header `Authorization: Bearer <BOSS_RESOLVE_SECRET>` to pay out the reward pool or apply the penalty. The site has no built-in scheduler for this; run it from a scheduled job, or from a bot or script you control that can make an HTTP request on a timer.
-
-### Admin panel
-
-- Sign in with a Discord ID listed in `ADMIN_DISCORD_IDS`, then visit `/admin`.
-- The panel covers recent activity, payouts, anti-cheat flags, support submissions, and switches to take individual games offline.
-- `/admin/boss` manages the boss roster: health, reward pool, penalty, and mechanic-specific settings for each boss.
+The site stands on its own. [Discore](https://github.com/xReSHo/discore), a separate Discord bot, adds raid announcements, removal of expired shop roles and a `/report` command that files bug reports into the admin panel.
 
 ## Permissions
 
-If you connect a bot token so the site can grant Discord roles (shop purchases, the achievement role reward), that bot needs:
-
-- The "Manage Roles" permission in your server
-- A role positioned above every role it may be asked to grant or remove
-
-No other Discord permissions are required, and no slash commands need to be registered, since the site has no bot commands of its own.
+A bot token is only needed for role grants. That bot needs **Manage Roles** and a role positioned above every role it grants or removes. The site registers no slash commands of its own.
