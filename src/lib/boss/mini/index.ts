@@ -18,6 +18,8 @@ import { miniAim, miniLitany, miniTyping } from "./content";
 import { withHaste } from "@/lib/equipment";
 import { getGear } from "@/lib/equipment-effects";
 import { scoreMiniAim, scoreMiniLitany, scoreMiniTyping } from "./score";
+import { loadKit, type KitBoss } from "@/lib/boss/kit";
+import { HOURGLASS_SHARE } from "@/lib/boss/kit-rules";
 
 export const MINI_GAMES = ["typing", "aim", "litany"] as const;
 export type MiniGame = (typeof MINI_GAMES)[number];
@@ -80,12 +82,18 @@ function seedFor(game: MiniGame, bossId: string, discordId: string, nonce: strin
   return `boss-mini:${game}:${bossId}:${discordId}:${nonce}`;
 }
 
-async function miniCooldownUntil(bossId: string, discordId: string): Promise<number> {
+async function miniCooldownUntil(boss: KitBoss, discordId: string): Promise<number> {
   const row = await prisma.bossHit.findUnique({
-    where: { bossId_discordId: { bossId, discordId } },
+    where: { bossId_discordId: { bossId: boss.id, discordId } },
     select: { meta: true },
   });
-  return (row?.meta as { miniCdUntil?: number } | null)?.miniCdUntil ?? 0;
+  const m = row?.meta as { miniCdUntil?: number; miniCdFrom?: number } | null;
+  const until = m?.miniCdUntil ?? 0;
+  if (until <= Date.now()) return 0;
+  // Smelling Salts taken during this wait ended it
+  const kit = await loadKit(boss, discordId);
+  const from = m?.miniCdFrom;
+  return from !== undefined && kit.saltsAt >= from && kit.saltsAt < until ? 0 : until;
 }
 
 export type MiniStartResult =
@@ -106,7 +114,7 @@ export async function startMini(
   if (!boss) return { ok: false, reason: "No reliquary trial is open right now." };
 
   const p = miniParams(boss.params);
-  const cd = await miniCooldownUntil(boss.id, discordId);
+  const cd = await miniCooldownUntil(boss, discordId);
   if (cd > Date.now()) {
     return { ok: false, reason: "Catch your breath before the next trial.", cooldownUntil: cd };
   }
@@ -189,8 +197,13 @@ export async function submitMini(
 
   const p = miniParams(boss.params);
   const seed = seedFor(game, boss.id, discordId, payload.nonce);
-  // the gauntlets: a shorter wait before the next trial
-  const cooldownUntil = Date.now() + withHaste(p.cooldownMs, await getGear(discordId));
+  // the gauntlets: a shorter wait before the next trial. The Saint's Hourglass
+  // halves what is left.
+  const kit = await loadKit(boss, discordId, { arm: true });
+  const cooldownUntil =
+    Date.now() +
+    withHaste(p.cooldownMs, await getGear(discordId)) *
+      (kit.on.includes("saints-hourglass") ? HOURGLASS_SHARE : 1);
 
   let score;
   let dmg = 0;

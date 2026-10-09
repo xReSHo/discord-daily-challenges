@@ -6,6 +6,7 @@ import { ArrowLeft, Coins, Skull, Swords, Timer, Users } from "lucide-react";
 import type { BossState, BossLeader } from "@/lib/boss/types";
 import { ArtImage } from "@/components/ArtImage";
 import { Spoils } from "@/components/Spoils";
+import { KitBar, kitShows } from "./KitBar";
 import styles from "./boss.module.css";
 
 export function fmtDuration(ms: number): string {
@@ -42,6 +43,8 @@ export function Stage({
   clock,
   notice,
   focus = false,
+  onUse,
+  beforeUse,
   children,
 }: {
   state: BossState;
@@ -56,12 +59,22 @@ export function Stage({
   notice?: React.ReactNode;
   /** a trial is being played in the middle: everything else stands back */
   focus?: boolean;
+  /** given while the raid is being fought: the fighter's shop gear is shown,
+   *  and this takes the fight as it stands after something is used */
+  onUse?: (next: BossState) => void;
+  /** send any strikes still in hand before something is used */
+  beforeUse?: () => Promise<void> | void;
   /** the middle of the stage: the boss himself, or what he is fought through */
   children: React.ReactNode;
 }) {
   const pct = hp === undefined ? 0 : Math.max(0, Math.min(100, (hp / state.maxHp) * 100));
   return (
-    <section className={`${styles.stage} ${focus ? styles.stageFocus : ""}`} data-status={state.status}>
+    <section
+      className={`${styles.stage} ${focus ? styles.stageFocus : ""}`}
+      data-status={state.status}
+      // the fighter's gear takes a band of the foot: the boss stands a little shorter
+      data-kit={(onUse && !focus && kitShows(state, Date.parse(state.expiresAt) - clock.ms)) || undefined}
+    >
       <div className={styles.backdrop} aria-hidden="true">
         <ArtImage art="boss" sizes="100vw" eager className={styles.backdropImg} />
       </div>
@@ -130,6 +143,7 @@ export function Stage({
               </div>
             </div>
           )}
+          {onUse && !focus && <KitBar state={state} onState={onUse} beforeUse={beforeUse} />}
           <p className={styles.stakes}>
             <span>
               <Coins size={13} /> <b>{state.rewardPool.toLocaleString("en-US")}</b> bounty, split by damage

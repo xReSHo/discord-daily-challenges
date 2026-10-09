@@ -1716,6 +1716,14 @@
   border-radius: var(--r);
 }
 
+/* a fighter with shop gear has a band of it in the foot: the boss gives up
+   that much height, so the whole fight still fits the window */
+@media (min-width: 1000px) {
+  .stage[data-kit] .portrait {
+    height: clamp(240px, calc(100dvh - 372px - 160px), 820px);
+  }
+}
+
 /* ---------- narrower screens: one column ---------- */
 @media (max-width: 999px) {
   .stage {

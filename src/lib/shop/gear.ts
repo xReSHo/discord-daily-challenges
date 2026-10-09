@@ -41,8 +41,10 @@ export type Gear = {
   /** A bundle: buying it puts these in the pack instead of itself. */
   contains?: string[];
   /**
-   * Whether the effect is wired into the game yet. Until it is, only admins
-   * can buy the item (to try the shop out); players see "Coming soon".
+   * Whether the item is on sale. Every effect is wired in (the raid gear in
+   * boss/kit-rules.ts, the trial charms in shop/charms.ts), so all are; set
+   * one to false to pull it — players then see "Coming soon" and only admins
+   * can buy it.
    */
   live: boolean;
 };
@@ -52,7 +54,7 @@ export const GEAR_CATEGORIES: Record<GearCategory, { title: string; short: strin
     title: "Raid gear",
     short: "Raid gear",
     blurb:
-      "Bought before a raid and carried in your pack. Each piece is used up by the next raid you fight in.",
+      "Bought before a raid and carried in your pack. Each piece is used up by the next raid it works in, with your first strike.",
   },
   boss: {
     title: "Boss-bane gear",
@@ -63,7 +65,7 @@ export const GEAR_CATEGORIES: Record<GearCategory, { title: string; short: strin
     title: "Consumables",
     short: "Consumables",
     blurb:
-      "Fired in the middle of a fight, when you choose. Three to a raid, a minute apart. The merchant restocks every Saturday.",
+      "Used from the arena in the middle of a fight, when you choose. Three to a raid, a minute apart, one draught at a time. The merchant restocks every Saturday.",
   },
   trial: {
     title: "Trial charms",
@@ -78,7 +80,7 @@ export const GEAR_ORDER: GearCategory[] = ["raid", "boss", "consumable", "trial"
 /** The day the weekly stock refills (0 = Sunday … 6 = Saturday): raid day. */
 export const RESTOCK_WEEKDAY = 6;
 
-const RAID = { category: "raid", lasts: "One raid", carry: 1, live: false } as const;
+const RAID = { category: "raid", lasts: "One raid", carry: 1, live: true } as const;
 
 export const GEAR: Gear[] = [
   {
@@ -95,7 +97,7 @@ export const GEAR: Gear[] = [
     id: "swift-gauntlets",
     name: "Swift Gauntlets",
     stat: "+2 clicks a second",
-    effect: "Raises how fast you may strike the click-race bosses.",
+    effect: "Raises how fast you may strike the click-race bosses. It stays in your pack against the others.",
     price: 5000,
     stock: null,
   },
@@ -104,7 +106,7 @@ export const GEAR: Gear[] = [
     id: "steady-hand",
     name: "Steady Hand",
     stat: "3 slips forgiven",
-    effect: "The first three times your combo would break in the raid, it holds.",
+    effect: "The first three times your combo would break in the raid, it holds. It stays in your pack against Veyrath and Grieveth, whose combos do not break.",
     price: 3000,
     stock: null,
   },
@@ -131,7 +133,7 @@ export const GEAR: Gear[] = [
     id: "war-horn",
     name: "War Horn",
     stat: "+10% for everyone",
-    effect: "Sound it and every fighter in the raid deals a tenth more.",
+    effect: "Sound it from the arena and every fighter in the raid deals a tenth more.",
     lasts: "30 min",
     price: 15000,
     stock: 3,
@@ -148,9 +150,9 @@ export const GEAR: Gear[] = [
   },
 ];
 
-const BANE = { category: "boss", lasts: "One raid", carry: 1, stock: null, live: false } as const;
-const USE = { category: "consumable", restock: "weekly", live: false } as const;
-const TRIAL = { category: "trial", stock: null, live: false } as const;
+const BANE = { category: "boss", lasts: "One raid", carry: 1, stock: null, live: true } as const;
+const USE = { category: "consumable", restock: "weekly", live: true } as const;
+const TRIAL = { category: "trial", stock: null, live: true } as const;
 
 GEAR.push(
   {
@@ -236,7 +238,7 @@ GEAR.push(
     id: "stopped-hour",
     name: "Stopped Hour",
     stat: "Combo cannot drop",
-    effect: "For a minute nothing breaks your combo: not a miss, not a pause.",
+    effect: "For a minute nothing breaks your combo: not a miss, not a pause. No use against Grieveth.",
     lasts: "60 seconds",
     price: 2000,
     stock: 25,
@@ -292,7 +294,7 @@ GEAR.push(
     id: "second-chance",
     name: "Second Chance",
     stat: "One more attempt",
-    effect: "A second attempt at one of today's trials.",
+    effect: "One more try at a trial you lost today: Typing, Aim, the Litany or the Braziers. Spent from the trials page.",
     lasts: "One trial",
     price: 1500,
     carry: 1,
@@ -303,7 +305,7 @@ GEAR.push(
     id: "wordle-insight",
     name: "Wordle Insight",
     stat: "Reveals a letter",
-    effect: "Shows one correct letter of today's word, in its place.",
+    effect: "Shows one correct letter of today's word, in its place. Spent from the Wordle board.",
     lasts: "One puzzle",
     price: 300,
     carry: 1,
@@ -314,7 +316,7 @@ GEAR.push(
     id: "streak-ward",
     name: "Streak Ward",
     stat: "Saves your streak",
-    effect: "Miss a day and your streak holds. It is spent on its own when you need it.",
+    effect: "Miss a day and your streak holds. It is spent on its own when you need it, and must be in your pack before the day you miss.",
     lasts: "One missed day",
     price: 3000,
     carry: 2,

@@ -10,6 +10,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { wardedDaysByPlayer } from "@/lib/shop/charms";
 import { getChallengeDateString } from "@/lib/challenge-date";
 import { streaksFromDays, perfectDays } from "@/lib/streak";
 import { SECTION_IDS } from "@/lib/sections";
@@ -84,11 +85,15 @@ async function build(): Promise<BaseRow[]> {
   const byId = new Map(users.map((u) => [u.discordId!, u]));
   const feats = new Map(featRows.map((f) => [f.discordId, f._count._all]));
 
+  // days a Streak Ward has covered hold a streak here as they do on the
+  // player's own page (read only: wards are spent when their owner is looked at)
+  const warded = await wardedDaysByPlayer().catch(() => new Map<string, string[]>());
+
   const out: BaseRow[] = [];
   for (const id of ids) {
     const completions = byUser.get(id)!;
     const perfect = perfectDays(completions, requirements);
-    const { current, longest } = streaksFromDays(perfect);
+    const { current, longest } = streaksFromDays([...perfect, ...(warded.get(id) ?? [])]);
     const games: Record<string, number> = {};
     const days = new Set<string>();
     for (const c of completions) {

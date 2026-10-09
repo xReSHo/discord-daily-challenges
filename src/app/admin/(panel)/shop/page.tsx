@@ -89,7 +89,7 @@ export default async function AdminShopPage({
     items: Prisma.sql`
       SELECT i.*,
         (SELECT count(*)::int FROM "Purchase" p
-          WHERE p."itemId" = i.id AND p.status = 'fulfilled') AS sold
+          WHERE p."itemId" = i.id AND p.status IN ('fulfilled', 'used')) AS sold
       FROM "ShopItem" i
       ORDER BY i."sortOrder" ASC, i."createdAt" ASC`,
   });

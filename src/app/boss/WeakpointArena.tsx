@@ -11,6 +11,7 @@ import {
   weakpointConfig,
   type Sac,
 } from "@/lib/boss/mechanics/weakpoint";
+import { NO_KIT, hourHolds, lured, resting } from "@/lib/boss/kit-rules";
 import { BossPortrait, Stage } from "./shared";
 import styles from "./boss.module.css";
 
@@ -52,7 +53,9 @@ export function WeakpointArena({ initial }: { initial: BossState }) {
   const serverRef = useRef(server);
   /** What the fighter did since the last flush, in order (see `cleanSeq`). */
   const seqRef = useRef("");
-  const comboRef = useRef(0);
+  const comboRef = useRef(initial.combo?.kind === "streak" ? (initial.combo.value ?? 0) : 0);
+  /** Slips the Steady Hand will still forgive, counted here between answers. */
+  const slipsRef = useRef(initial.kit?.slipsLeft ?? 0);
   const lastLanceRef = useRef(0);
   const fxIdRef = useRef(0);
   const poppedRef = useRef<Set<number>>(new Set());
@@ -63,25 +66,58 @@ export function WeakpointArena({ initial }: { initial: BossState }) {
     serverRef.current = server;
   });
 
+  /** The combo would break here. True when the fighter's gear holds it. */
+  const held = useCallback((): boolean => {
+    const kit = serverRef.current.kit ?? NO_KIT;
+    if (hourHolds(kit, Date.now())) return true;
+    if (comboRef.current > 0 && slipsRef.current > 0) {
+      slipsRef.current -= 1; // the Steady Hand forgives this one
+      return true;
+    }
+    return false;
+  }, []);
+
   const recompute = useCallback(() => {
     const s = serverRef.current;
     const nowMs = Date.now();
-    const cooling = (s.yourCooldownUntil ?? 0) > nowMs;
+    const kit = s.kit ?? NO_KIT;
+    // stalled by the rot, or spent after a draught: either way nothing lands
+    const cooling = (s.yourCooldownUntil ?? 0) > nowMs || resting(kit, nowMs);
     const cfg = s.weakpoint ? weakpointConfig(s.weakpoint) : null;
+    const spawnMs = Date.parse(s.spawnsAt);
     const sacs =
       cfg && !cooling
-        ? liveSacs(
-            cfg,
-            s.bossKey,
-            nowMs - Date.parse(s.spawnsAt),
+        ? liveSacs(cfg, s.bossKey, nowMs - spawnMs, (i) =>
+            lured(kit.lures, spawnMs, cfg.sacIntervalMs, i),
           ).filter((x) => !poppedRef.current.has(x.i))
         : [];
     // a combo is kept by lancing: it lapses with the arm stalled or idle
-    if (cooling || performance.now() - lastLanceRef.current > COMBO_IDLE_MS) {
-      comboRef.current = 0;
+    if (comboRef.current > 0) {
+      // a combo carried in from the server (a reload mid-fight) counts from now
+      if (lastLanceRef.current === 0) lastLanceRef.current = performance.now();
+      const stalled = (s.yourCooldownUntil ?? 0) > nowMs;
+      const idle = performance.now() - lastLanceRef.current > COMBO_IDLE_MS;
+      if (stalled) {
+        if (!hourHolds(kit, nowMs)) comboRef.current = 0;
+      } else if (idle) {
+        if (held()) lastLanceRef.current = performance.now(); // held: the clock starts over
+        else comboRef.current = 0;
+      }
     }
     setView({ nowMs, sacs, cooling, combo: comboRef.current });
     setFx((prev) => (prev.some((f) => f.until <= nowMs) ? prev.filter((f) => f.until > nowMs) : prev));
+  }, [held]);
+
+  /** Take the server's count of the combo and the slips, when nothing has been
+   *  done since it was asked. */
+  const sync = useCallback((next: BossState, force = false) => {
+    setServer(next);
+    if (!force && seqRef.current) return;
+    if (next.combo?.kind === "streak" && next.combo.value !== undefined) {
+      if (next.combo.value > comboRef.current) lastLanceRef.current = performance.now();
+      comboRef.current = next.combo.value;
+    }
+    slipsRef.current = next.kit?.slipsLeft ?? 0;
   }, []);
 
   // wrong arena / fight over — bounce to the dispatcher
@@ -110,10 +146,10 @@ export function WeakpointArena({ initial }: { initial: BossState }) {
         const res = await fetch("/api/boss/hit", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ seq }),
+          body: JSON.stringify({ seq, kv: serverRef.current.kit?.v ?? 0 }),
         });
         const data = (await res.json()) as HitResponse;
-        if (data.state) setServer(data.state);
+        if (data.state) sync(data.state);
       } catch {
         /* dropped batch — the idle poll re-syncs */
       } finally {
@@ -121,7 +157,7 @@ export function WeakpointArena({ initial }: { initial: BossState }) {
       }
     }, FLUSH_MS);
     return () => clearInterval(id);
-  }, []);
+  }, [sync]);
 
   // idle poll — only when the fighter isn't actively lancing
   useEffect(() => {
@@ -189,20 +225,25 @@ export function WeakpointArena({ initial }: { initial: BossState }) {
         : null;
       if (!cfg || seqRef.current.length >= MAX_SEQ) return;
       seqRef.current += "m";
-      comboRef.current = 0;
+      if (!held()) comboRef.current = 0;
       lastActionRef.current = performance.now();
       burst(x, y, -1, cfg.missDmg > 0 ? `+${fmtDmg(cfg.missDmg)}` : "miss");
       recompute();
     },
-    [burst, recompute],
+    [burst, recompute, held],
   );
+
+  // something from the pack was used
+  const onUse = useCallback((next: BossState) => sync(next, true), [sync]);
 
   if (!server.weakpoint) return null; // the guard effect reloads us out
 
   const cfg = weakpointConfig(server.weakpoint);
   const { nowMs, sacs, cooling, combo } = view;
   const spawnMs = Date.parse(server.spawnsAt);
-  const coolingUntil = server.yourCooldownUntil ?? 0;
+  const kit = server.kit ?? NO_KIT;
+  const spent = resting(kit, nowMs);
+  const coolingUntil = spent ? kit.restUntil : (server.yourCooldownUntil ?? 0);
   const expiresIn = Date.parse(server.expiresAt) - nowMs;
 
   const mult = comboMult(cfg, combo);
@@ -217,11 +258,14 @@ export function WeakpointArena({ initial }: { initial: BossState }) {
       hp={server.hp}
       mine={server.yourDamage}
       clock={{ label: "Ends in", ms: expiresIn }}
+      onUse={onUse}
       notice={
         <div className={styles.siltHud}>
           {cooling ? (
             <p className={`${styles.sub} ${styles.lost}`}>
-              The rot has your arm — wait for it to pass.
+              {spent
+                ? "The draught has left you spent. Wait for it to pass."
+                : "The rot has your arm — wait for it to pass."}
             </p>
           ) : (
             comboOn && (
@@ -311,7 +355,7 @@ export function WeakpointArena({ initial }: { initial: BossState }) {
 
           {cooling && (
             <div className={styles.stall}>
-              rot spreading — {Math.max(0, Math.ceil((coolingUntil - nowMs) / 1000))}s
+              {spent ? "spent" : "rot spreading"} — {Math.max(0, Math.ceil((coolingUntil - nowMs) / 1000))}s
             </div>
           )}
         </div>

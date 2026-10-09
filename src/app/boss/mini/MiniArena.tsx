@@ -208,6 +208,7 @@ export function MiniArena({ initial }: { initial: BossState }) {
       hp={server.hp}
       mine={server.yourDamage}
       clock={{ label: "Ends in", ms: expiresIn }}
+      onUse={setServer}
       notice={
         <>
       {result && (

@@ -14,6 +14,14 @@ import {
   momentumStep,
   momentumTier,
 } from "@/lib/boss/mechanics/combo";
+import {
+  DEEP_LUNGS_FULL_MS,
+  KINDLING_FLOOR,
+  NO_KIT,
+  hourHolds,
+  kitMult,
+  resting,
+} from "@/lib/boss/kit-rules";
 import { WeakpointArena } from "./WeakpointArena";
 import { MiniArena } from "./mini/MiniArena";
 import { BossPortrait, ComboBand, Outcome, Stage, fmtDuration } from "./shared";
@@ -81,6 +89,9 @@ function ClickerArena({ initial }: { initial: BossState }) {
   const activeRef = useRef(false);
   const captchaRef = useRef(false);
   const multRef = useRef(1); // current eclipse damage multiplier, for the ticker
+  const kitRef = useRef(initial.kit ?? NO_KIT); // the fighter's shop gear
+  const hornRef = useRef(initial.hornUntil ?? 0);
+  const hpShareRef = useRef(1);
 
   // --- the combo, kept here between answers from the server. The server
   // decides the damage; this is only so the band moves the moment you act. ---
@@ -103,6 +114,12 @@ function ClickerArena({ initial }: { initial: BossState }) {
   }));
 
   const active = server.status === "active" && !server.slain;
+  const kit = server.kit ?? NO_KIT;
+  // Deep Lungs: a full breath in less time
+  const fullMs = kit.on.includes("deep-lungs") ? DEEP_LUNGS_FULL_MS : BREATH.fullMs;
+  const fullMsRef = useRef(fullMs);
+  // the Eclipse Shard: the light no longer turns blows aside
+  const shard = kit.on.includes("eclipse-shard");
 
   // eclipse phase — derived locally from spawnsAt + the cycle config, so the
   // countdown ticks between polls with no extra request. The server still owns
@@ -121,7 +138,14 @@ function ClickerArena({ initial }: { initial: BossState }) {
   useEffect(() => {
     activeRef.current = active;
     captchaRef.current = captcha !== null;
-    multRef.current = phase?.mult ?? 1;
+    multRef.current =
+      phase?.kind === "light" && shard && server.phase
+        ? Math.max(phase.mult, server.phase.neutralMult)
+        : (phase?.mult ?? 1);
+    kitRef.current = kit;
+    hornRef.current = server.hornUntil ?? 0;
+    hpShareRef.current = server.maxHp > 0 ? server.hp / server.maxHp : 1;
+    fullMsRef.current = fullMs;
     if (server.combo?.kind === "corona") comboMultRef.current = coronaMult(server.combo.stacks);
   });
 
@@ -168,41 +192,51 @@ function ClickerArena({ initial }: { initial: BossState }) {
   }, [server.status]);
 
   // --- flush accumulated clicks ---
-  useEffect(() => {
-    const id = setInterval(async () => {
-      if (flushingRef.current || captchaRef.current || !activeRef.current) return;
-      const n = pendingRef.current;
-      if (n <= 0) return;
-      pendingRef.current = 0;
-      unackedRef.current = n;
-      flushingRef.current = true;
-      try {
-        const res = await fetch("/api/boss/hit", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ clicks: n, rest: Math.round(restRef.current) }),
-        });
-        restRef.current = 0;
-        const data = (await res.json()) as HitResponse;
-        // only one flush is ever in flight, so its state is authoritative
-        if (data.state) {
-          setServer(data.state);
-          const c = data.state.combo;
-          if (c?.kind === "momentum") furyRef.current = c.value;
-          // heavy blows are spent as you strike; only take the server's count
-          // when nothing has been struck since
-          if (c?.kind === "breath" && pendingRef.current === 0) {
-            breathRef.current = { blows: c.blows, mult: c.mult };
-          }
+  const flush = useCallback(async () => {
+    if (flushingRef.current || captchaRef.current || !activeRef.current) return;
+    const n = pendingRef.current;
+    if (n <= 0) return;
+    pendingRef.current = 0;
+    unackedRef.current = n;
+    flushingRef.current = true;
+    try {
+      const res = await fetch("/api/boss/hit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clicks: n, rest: Math.round(restRef.current), kv: kitRef.current.v }),
+      });
+      restRef.current = 0;
+      const data = (await res.json()) as HitResponse;
+      // only one flush is ever in flight, so its state is authoritative
+      if (data.state) {
+        setServer(data.state);
+        const c = data.state.combo;
+        if (c?.kind === "momentum") furyRef.current = c.value;
+        // heavy blows are spent as you strike; only take the server's count
+        // when nothing has been struck since
+        if (c?.kind === "breath" && pendingRef.current === 0) {
+          breathRef.current = { blows: c.blows, mult: c.mult };
         }
-      } catch {
-        /* dropped batch — poll will re-sync */
-      } finally {
-        unackedRef.current = 0;
-        flushingRef.current = false;
       }
-    }, FLUSH_MS);
+    } catch {
+      /* dropped batch — poll will re-sync */
+    } finally {
+      unackedRef.current = 0;
+      flushingRef.current = false;
+    }
+  }, []);
+
+  useEffect(() => {
+    const id = setInterval(flush, FLUSH_MS);
     return () => clearInterval(id);
+  }, [flush]);
+
+  // something from the pack was used: take the fight as the server left it
+  const onUse = useCallback((next: BossState) => {
+    setServer(next);
+    const c = next.combo;
+    if (c?.kind === "momentum") furyRef.current = c.value;
+    if (c?.kind === "breath") breathRef.current = { blows: c.blows, mult: c.mult };
   }, []);
 
   // --- display ticker: reconciles server hp/damage with in-flight local
@@ -210,7 +244,16 @@ function ClickerArena({ initial }: { initial: BossState }) {
   useEffect(() => {
     const id = setInterval(() => {
       const inflight = pendingRef.current + unackedRef.current;
-      const dmg = inflight * server.dmgPerClick * multRef.current * comboMultRef.current;
+      const dmg =
+        inflight *
+        server.dmgPerClick *
+        multRef.current *
+        comboMultRef.current *
+        kitMult(kitRef.current, {
+          hpShare: hpShareRef.current,
+          hornUntil: hornRef.current,
+          now: Date.now(),
+        });
       const hpR = Math.ceil(Math.max(0, server.hp - dmg));
       const mineR = Math.round((server.yourDamage + dmg) * 10) / 10;
       setDisplay((d) =>
@@ -229,20 +272,25 @@ function ClickerArena({ initial }: { initial: BossState }) {
       if (comboKind === "momentum") {
         const pace = paceRef.current;
         while (pace.length && t - pace[0] > PACE_WINDOW_MS) pace.shift();
-        furyRef.current = activeRef.current
-          ? momentumStep(
-              furyRef.current,
-              pace.length / (PACE_WINDOW_MS / 1000),
-              server.cpsCap,
-              COMBO_TICK_MS / 1000,
-            )
-          : furyRef.current;
+        if (activeRef.current) {
+          const k = kitRef.current;
+          // Kindling keeps the gauge at half; the Stopped Hour stops it falling
+          const floor = k.on.includes("kindling") ? KINDLING_FLOOR : 0;
+          const was = Math.max(floor, furyRef.current);
+          const stepped = momentumStep(
+            was,
+            pace.length / (PACE_WINDOW_MS / 1000),
+            server.cpsCap,
+            COMBO_TICK_MS / 1000,
+          );
+          furyRef.current = Math.max(floor, hourHolds(k, Date.now()) ? Math.max(was, stepped) : stepped);
+        }
         comboMultRef.current = momentumMult(furyRef.current);
       } else if (comboKind === "breath") {
         comboMultRef.current = breathRef.current.blows > 0 ? breathRef.current.mult : 1;
       }
       const fury = Math.round(furyRef.current * 200) / 200;
-      const rest = lastClickRef.current ? Math.min(BREATH.fullMs, t - lastClickRef.current) : 0;
+      const rest = lastClickRef.current ? Math.min(fullMsRef.current, t - lastClickRef.current) : 0;
       const restShown = Math.round(rest / 100) * 100;
       const { blows, mult } = breathRef.current;
       const inflight = pendingRef.current + unackedRef.current;
@@ -315,6 +363,8 @@ function ClickerArena({ initial }: { initial: BossState }) {
 
   const onHit = useCallback(() => {
     if (!activeRef.current || captchaRef.current) return;
+    // the draught wearing off: no blow lands
+    if (resting(kitRef.current, Date.now())) return;
     const t = performance.now();
 
     const raw = rawTimesRef.current;
@@ -336,7 +386,7 @@ function ClickerArena({ initial }: { initial: BossState }) {
     } else if (comboKind === "breath") {
       // the pause before this strike is the breath drawn; then spend a blow
       const rest = lastClickRef.current ? t - lastClickRef.current : 0;
-      const drawn = breathFrom(rest);
+      const drawn = breathFrom(rest, fullMsRef.current);
       if (drawn) {
         restRef.current = Math.max(restRef.current, rest);
         breathRef.current = betterBreath(breathRef.current, drawn);
@@ -446,7 +496,7 @@ function ClickerArena({ initial }: { initial: BossState }) {
     );
   } else if (combo?.kind === "breath") {
     const drawing = band.blows === 0 && band.rest >= 400;
-    const drawn = breathFrom(band.rest);
+    const drawn = breathFrom(band.rest, fullMs);
     comboBand = (
       <ComboBand
         tone="breath"
@@ -459,22 +509,22 @@ function ClickerArena({ initial }: { initial: BossState }) {
             <b>{drawing ? "Drawing breath" : "Breath"}</b>
           )
         }
-        bar={band.blows > 0 ? band.blows / BREATH.blows : drawing ? band.rest / BREATH.fullMs : 0}
+        bar={band.blows > 0 ? band.blows / BREATH.blows : drawing ? band.rest / fullMs : 0}
         mult={band.blows > 0 ? band.mult : drawing && drawn ? drawn.mult : 1}
         note={band.blows > 0 ? "each" : drawing && drawn ? "if you strike now" : "damage"}
         live={band.blows > 0 || drawing}
-        peak={band.blows === 0 && band.rest >= BREATH.fullMs}
+        peak={band.blows === 0 && band.rest >= fullMs}
         hint={
           band.blows > 0 ? (
             <>Strike — these blows land heavy. Then stop and breathe again.</>
-          ) : band.rest >= BREATH.fullMs ? (
+          ) : band.rest >= fullMs ? (
             <>
               <b>A full breath.</b> Strike now: your next {BREATH.blows} blows land at ×
               {(1 + BREATH.maxBonus).toFixed(1)}.
             </>
           ) : (
             <>
-              Stop striking to draw breath, up to {BREATH.fullMs / 1000} seconds. The longer you
+              Stop striking to draw breath, up to {fullMs / 1000} seconds. The longer you
               hold, the heavier your next blows.
             </>
           )
@@ -501,7 +551,9 @@ function ClickerArena({ initial }: { initial: BossState }) {
         live={combo.stacks > 0}
         peak={combo.stacks >= CORONA.max}
         hint={
-          phase.kind === "light" ? (
+          phase.kind === "light" && shard ? (
+            <>Your shard cuts through the light. Strike on: your coronas hold.</>
+          ) : phase.kind === "light" ? (
             <span className={combo.stacks > 0 ? styles.comboHintWarn : undefined}>
               {combo.stacks > 0
                 ? "Hold. One strike in the light burns every corona you hold."
@@ -533,6 +585,8 @@ function ClickerArena({ initial }: { initial: BossState }) {
       hp={display.hp}
       mine={display.mine}
       clock={{ label: "Ends in", ms: expiresIn }}
+      onUse={onUse}
+      beforeUse={flush}
       notice={
         <>
           {phase ? (
@@ -550,11 +604,16 @@ function ClickerArena({ initial }: { initial: BossState }) {
                 {phase.kind === "dark"
                   ? "The black sun is open"
                   : phase.kind === "light"
-                    ? "The light drowns your blows"
+                    ? shard
+                      ? "The light breaks on your shard"
+                      : "The light drowns your blows"
                     : "The dusk holds — clean strikes"}
               </span>
               <span className={styles.eclipseMult}>
-                <small>hits</small> ×{phase.mult}
+                <small>hits</small> ×
+                {phase.kind === "light" && shard && server.phase
+                  ? Math.max(phase.mult, server.phase.neutralMult)
+                  : phase.mult}
               </span>
               <span className={`mono ${styles.eclipseClock}`}>
                 {fmtDuration(phase.endsInMs)} →{" "}

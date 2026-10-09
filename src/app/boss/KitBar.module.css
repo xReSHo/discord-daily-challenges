@@ -1,0 +1,160 @@
+/* A fighter's shop gear, along the foot of the raid. */
+
+.kit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.running {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 10px;
+}
+
+.fx {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 4px 11px;
+  font-size: 11.5px;
+  color: var(--gold-bright);
+  border: 1px solid var(--line-gold);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+}
+
+.fx b {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.fxBad {
+  color: var(--bad-bright);
+  border-color: color-mix(in srgb, var(--bad-bright) 45%, transparent);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: stretch;
+  gap: 8px 18px;
+}
+
+.worn,
+.uses {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+.worn li,
+.use {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  padding: 4px 12px 4px 5px;
+  text-align: left;
+  font-size: 12px;
+  line-height: 1.25;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: color-mix(in srgb, var(--bg) 80%, transparent);
+}
+
+.worn li {
+  color: var(--ink-dim);
+}
+
+.worn img,
+.use img {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.worn span,
+.use span {
+  display: flex;
+  flex-direction: column;
+}
+
+.worn small,
+.use small {
+  font-size: 10.5px;
+  color: var(--ink-mute);
+}
+
+.use {
+  cursor: pointer;
+  border-color: var(--line-gold);
+  transition: border-color 0.2s, background 0.2s, transform 0.2s;
+}
+
+.use small {
+  color: var(--gold);
+}
+
+.use:hover:not(:disabled) {
+  border-color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 9%, var(--bg));
+  transform: translateY(-1px);
+}
+
+.use:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.qty {
+  position: absolute;
+  left: 26px;
+  bottom: 2px;
+  font-size: 10px;
+  color: var(--gold-bright);
+  text-shadow: 0 1px 3px #000;
+}
+
+.limit {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+.note {
+  font-size: 12px;
+  color: var(--gold-bright);
+}
+
+.noteBad {
+  color: var(--warn);
+}
+
+@media (max-width: 520px) {
+  .worn li,
+  .use {
+    min-height: 44px;
+    padding-right: 9px;
+    font-size: 11.5px;
+  }
+  .worn small {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .use {
+    transition: none;
+  }
+}

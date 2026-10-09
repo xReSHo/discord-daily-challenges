@@ -9,17 +9,20 @@ import { AppFrame } from "@/components/AppFrame";
 import { GameHeader } from "@/components/GameHeader";
 import { SectionClosed } from "@/components/SectionClosed";
 import { WordleBoard } from "./WordleBoard";
+import { charmCount, getWordleHints } from "@/lib/shop/charms";
 
 export default async function WordlePage() {
   const session = await auth();
   const discordId = session?.user?.discordId;
   if (!discordId) redirect("/");
 
-  const [view, devMode, status, reward] = await Promise.all([
+  const [view, devMode, status, reward, hints, insights] = await Promise.all([
     getGameView(discordId),
     isDevMode(discordId),
     getSectionStatus("wordle"),
     getSectionReward("wordle"),
+    getWordleHints(discordId),
+    charmCount(discordId, "wordle-insight"),
   ]);
   if (status.hidden) notFound();
 
@@ -37,7 +40,7 @@ export default async function WordlePage() {
           {status.disabled ? (
             <SectionClosed title="Wordle" note={status.note} />
           ) : (
-            <WordleBoard initialView={view} devMode={devMode} />
+            <WordleBoard initialView={view} devMode={devMode} initialHints={hints} insights={insights} />
           )}
         </div>
       </div>

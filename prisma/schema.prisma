@@ -362,7 +362,12 @@ model Purchase {
   price         Int
   paidCash      Int       @default(0)
   paidBank      Int       @default(0)
+  /// "charging" | "fulfilled" | "failed" | "opened" (a bundle) | "used" (gear
+  /// taken out of the pack: see boss/kit.ts and shop/charms.ts).
   status        String    @default("charging")
+  /// The Discord role a role item grants. On a `used` gear row, which has no
+  /// role, it records what the gear was used on instead: `raid:<bossId>:<ms>`,
+  /// `chance:<day>:<section>`, `insight:<day>:<pos>` or `ward:<day>`.
   roleId        String?
   durationSec   Int       @default(0)
   /// null = permanent. When set and passed, the bot removes the role.

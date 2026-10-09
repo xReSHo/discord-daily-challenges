@@ -29,6 +29,7 @@
 
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { wardedDays } from "@/lib/shop/charms";
 import { perfectDays, streaksFromDays } from "@/lib/streak";
 import { getRequirements } from "@/lib/day-requirement";
 import { SECTION_IDS } from "@/lib/sections";
@@ -90,7 +91,13 @@ async function checkTrigger(
     case "perfect_days":
       return (await perfectDaysSinceLaunch(discordId, ctx)).length >= t.count;
     case "perfect_streak":
-      return streaksFromDays(await perfectDaysSinceLaunch(discordId, ctx)).longest >= t.days;
+      // a day covered by a Streak Ward holds the streak, as it does everywhere
+      return (
+        streaksFromDays([
+          ...(await perfectDaysSinceLaunch(discordId, ctx)),
+          ...(await wardedDays(discordId).catch(() => [])),
+        ]).longest >= t.days
+      );
     case "score": {
       const kind = SCORE_KINDS[t.kind];
       return (
@@ -145,7 +152,8 @@ async function checkTrigger(
     case "purchases":
       return (
         (await prisma.purchase.count({
-          where: { discordId, status: "fulfilled", createdAt: SINCE },
+          // gear that has been used was still bought
+          where: { discordId, status: { in: ["fulfilled", "used"] }, createdAt: SINCE },
         })) >= t.count
       );
     case "duel_wins":

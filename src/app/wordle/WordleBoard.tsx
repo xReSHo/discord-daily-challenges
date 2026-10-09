@@ -27,11 +27,20 @@ function aggregateKeyMarks(rows: GameView["rows"]): Record<string, Mark> {
 export function WordleBoard({
   initialView,
   devMode = false,
+  initialHints = [],
+  insights = 0,
 }: {
   initialView: GameView;
   devMode?: boolean;
+  /** letters a Wordle Insight has already shown today */
+  initialHints?: { pos: number; letter: string }[];
+  /** Wordle Insights in the player's pack */
+  insights?: number;
 }) {
   const [view, setView] = useState(initialView);
+  const [hints, setHints] = useState(initialHints);
+  const [insightsLeft, setInsightsLeft] = useState(insights);
+  const [revealing, setRevealing] = useState(false);
   const [current, setCurrent] = useState("");
   const [error, setError] = useState("");
   const [shake, setShake] = useState(false);
@@ -139,6 +148,32 @@ export function WordleBoard({
     }
   }, [applyView]);
 
+  // spend a Wordle Insight: the server names one letter, in its place
+  const revealLetter = useCallback(async () => {
+    if (revealing) return;
+    setRevealing(true);
+    try {
+      const res = await fetch("/api/wordle/insight", { method: "POST" });
+      const data = (await res.json()) as {
+        ok?: boolean;
+        error?: string;
+        hint?: { pos: number; letter: string };
+        left?: number;
+      };
+      if (data.ok && data.hint) {
+        const hint = data.hint;
+        setHints((h) => [...h.filter((x) => x.pos !== hint.pos), hint]);
+        setInsightsLeft(data.left ?? 0);
+      } else {
+        flashError(data.error ?? "That didn't work.");
+      }
+    } catch {
+      flashError("Network error - try again");
+    } finally {
+      setRevealing(false);
+    }
+  }, [revealing, flashError]);
+
   const keyMarks = aggregateKeyMarks(view.rows);
   const activeRowIndex = playing ? view.rows.length : -1;
 
@@ -205,6 +240,9 @@ export function WordleBoard({
               <div key={rowIndex} className={rowClass}>
                 {letters.map((ch, i) => {
                   const mark = filled?.marks[i];
+                  // a letter an Insight has shown, ghosted where it belongs
+                  const ghost =
+                    isActive && !ch.trim() ? hints.find((h) => h.pos === i)?.letter : undefined;
                   const cls = [
                     styles.tile,
                     mark ? styles[mark] : "",
@@ -216,8 +254,8 @@ export function WordleBoard({
                     .filter(Boolean)
                     .join(" ");
                   return (
-                    <div key={i} className={cls}>
-                      {ch.trim()}
+                    <div key={i} className={cls} style={ghost ? { color: "var(--gold)", opacity: 0.55 } : undefined}>
+                      {ch.trim() || ghost}
                     </div>
                   );
                 })}
@@ -226,6 +264,26 @@ export function WordleBoard({
           })}
         </div>
       </div>
+
+      {playing && (insightsLeft > 0 || hints.length > 0) && (
+        <p style={{ textAlign: "center", fontSize: 12.5, color: "var(--ink-dim)" }}>
+          {hints.length > 0 && (
+            <>
+              Insight:{" "}
+              {[...hints]
+                .sort((a, b) => a.pos - b.pos)
+                .map((h) => `letter ${h.pos + 1} is ${h.letter.toUpperCase()}`)
+                .join(", ")}
+              .{" "}
+            </>
+          )}
+          {insightsLeft > 0 && (
+            <button type="button" className="btn btn--quiet btn--sm" disabled={revealing} onClick={revealLetter}>
+              {revealing ? "Revealing…" : `Reveal a letter (Wordle Insight ×${insightsLeft})`}
+            </button>
+          )}
+        </p>
+      )}
 
       <div className={styles.result}>
         <Banner view={view} reward={reward} busy={busy} onClaim={claimReward} devMode={devMode} />

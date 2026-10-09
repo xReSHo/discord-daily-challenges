@@ -13,6 +13,7 @@ import { getChallengeDateString } from "@/lib/challenge-date";
 import { SECTION_IDS } from "@/lib/sections";
 import { getRequirements } from "@/lib/day-requirement";
 import { perfectDaysOf, type Requirements } from "@/lib/day-requirement-rule";
+import { settleWards } from "@/lib/shop/charms";
 
 const DAY_MS = 86_400_000;
 
@@ -105,7 +106,10 @@ export async function getUserStreak(discordId: string): Promise<UserStreak> {
   ]);
 
   const perfect = perfectDays(rows, requirements);
-  const { current, longest } = streaksFromDays(perfect);
+  // a Streak Ward covers a missed day: the streak runs through it, though the
+  // day is not counted as a perfect one
+  const warded = await settleWards(discordId, perfect);
+  const { current, longest } = streaksFromDays([...perfect, ...warded]);
   return {
     current,
     longest,

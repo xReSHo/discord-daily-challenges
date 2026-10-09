@@ -1,6 +1,7 @@
 /** Shared boss types — safe to import from client components (no server deps). */
 
 import type { ComboState } from "./mechanics/combo";
+import type { Kit } from "./kit-rules";
 
 export type BossLeader = {
   rank: number;
@@ -64,6 +65,11 @@ export type BossState = {
   /** The habit this boss rewards with more damage, and where this fighter
    *  stands in it (see mechanics/combo.ts). Absent when there is no boss. */
   combo?: ComboState;
+  /** The shop gear this fighter has at work, and what they can still use
+   *  (see kit-rules.ts). Absent when signed out or no raid is on. */
+  kit?: Kit;
+  /** Epoch ms until which a War Horn is sounding for every fighter, or 0. */
+  hornUntil?: number;
   /** One-line "how to fight" copy for the arena + the bot spawn embed. */
   blurb: string;
   /** Portrait asset base path — `${image}.webp` / `${image}.png`. */

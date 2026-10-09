@@ -20,7 +20,8 @@ export type ComboKind = "streak" | "momentum" | "breath" | "corona" | "threads";
 
 /** What the server tells a fighter about their own combo. */
 export type ComboState =
-  | { kind: "streak" }
+  /** Growths lanced in a row, as the server last counted them. */
+  | { kind: "streak"; value?: number }
   /** 0..1 — how hard they have been pressing. */
   | { kind: "momentum"; value: number }
   /** Heavy blows still in hand, and what each is worth. */
@@ -93,10 +94,14 @@ export const BREATH = {
   maxBonus: 2,
 } as const;
 
-/** The heavy blows a rest of `restMs` buys, or null if it was too short. */
-export function breathFrom(restMs: number): { blows: number; mult: number } | null {
+/** The heavy blows a rest of `restMs` buys, or null if it was too short.
+ *  `fullMs` is how long a full breath takes this fighter (Deep Lungs). */
+export function breathFrom(
+  restMs: number,
+  fullMs: number = BREATH.fullMs,
+): { blows: number; mult: number } | null {
   if (!(restMs >= BREATH.minMs)) return null;
-  const b = clamp01(restMs / BREATH.fullMs);
+  const b = clamp01(restMs / fullMs);
   return { blows: Math.round(BREATH.blows * b), mult: round2(1 + BREATH.maxBonus * b) };
 }
 

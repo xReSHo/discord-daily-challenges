@@ -58,6 +58,26 @@ import {
 } from "./mechanics/weakpoint";
 import { weeklyWindow } from "./window";
 import type { BossState } from "./types";
+import { getGear as getShopGear } from "@/lib/shop/gear";
+import { bustKit, loadKit, raidMarks, spendFromPack } from "./kit";
+import {
+  BERSERK_REST_MS,
+  DEEP_LUNGS_FULL_MS,
+  FIREBOMB_SHARE,
+  HORN_MS,
+  KINDLING_FLOOR,
+  LANCERS_EYE_TTL,
+  NO_KIT,
+  SWIFT_CPS,
+  USABLE_IDS,
+  USES_PER_RAID,
+  gearApplies,
+  hourHolds,
+  kitMult,
+  lured,
+  resting,
+  type Kit,
+} from "./kit-rules";
 
 export type { BossState, BossLeader, HitResponse } from "./types";
 
@@ -72,14 +92,20 @@ type BossRow = Prisma.BossGetPayload<object>;
 
 /** What a fighter's row remembers between batches, per mechanic. */
 type HitMeta = {
+  // shop gear (see kit-rules.ts): slips the Steady Hand has forgiven, and the
+  // last Second Breath this fighter's combo has taken in
+  sl?: number;
+  fillSeen?: number;
   // weak-point
   missStreak?: number;
   stallUntil?: number;
+  stallFrom?: number;
   combo?: number;
   /** the legendary gauntlets have already spared this fighter one stall */
   spared?: boolean;
   // mini-arena
   miniCdUntil?: number;
+  miniCdFrom?: number;
   th?: { chain: number; recent: string[] };
   // click race: momentum, breath, corona
   mo?: number;
@@ -87,26 +113,65 @@ type HitMeta = {
   co?: { stacks: number; phase: number; strikes: number; done: boolean };
 };
 
-/** A fighter's standing in this boss's combo, from their row. */
-function comboFromMeta(boss: BossRow, raw: unknown): ComboState {
+/** Growths in a row that put the weak-point combo at its peak. */
+function streakPeak(p: { comboStep: number; comboBonus: number; comboMax: number }): number {
+  return p.comboBonus > 0 ? Math.ceil((p.comboMax - 1) / p.comboBonus) * p.comboStep : 0;
+}
+
+/**
+ * A fighter's standing in this boss's combo, from their row. With their `kit`,
+ * it also shows what the gear has done that the row has not caught up with: a
+ * Second Breath just taken, the floor Kindling keeps.
+ */
+function comboFromMeta(boss: BossRow, raw: unknown, kit?: Kit): ComboState {
   const m = (raw ?? {}) as HitMeta;
+  const filled = !!kit && kit.fillAt > (m.fillSeen ?? 0);
   switch (comboKindFor(boss.mechanic, boss.templateKey, boss.params)) {
-    case "momentum":
-      return { kind: "momentum", value: m.mo ?? 0 };
+    case "momentum": {
+      const floor = kit?.on.includes("kindling") ? KINDLING_FLOOR : 0;
+      return { kind: "momentum", value: filled ? 1 : Math.max(floor, m.mo ?? 0) };
+    }
     case "breath":
-      return { kind: "breath", blows: m.br?.blows ?? 0, mult: m.br?.mult ?? 1 };
+      return filled
+        ? { kind: "breath", blows: BREATH.blows, mult: 1 + BREATH.maxBonus }
+        : { kind: "breath", blows: m.br?.blows ?? 0, mult: m.br?.mult ?? 1 };
     case "corona":
       return {
         kind: "corona",
-        stacks: m.co?.stacks ?? 0,
+        stacks: filled ? CORONA.max : (m.co?.stacks ?? 0),
         phase: m.co?.phase ?? -1,
         strikes: m.co?.strikes ?? 0,
       };
     case "threads":
-      return { kind: "threads", chain: m.th?.chain ?? 0, recent: m.th?.recent ?? [] };
+      return {
+        kind: "threads",
+        chain: filled ? THREADS.max : (m.th?.chain ?? 0),
+        recent: m.th?.recent ?? [],
+      };
     default:
-      return { kind: "streak" };
+      return {
+        kind: "streak",
+        value: filled
+          ? Math.max(m.combo ?? 0, streakPeak(weakpointConfig(boss.params)))
+          : (m.combo ?? 0),
+      };
   }
+}
+
+/** Until when a War Horn is sounding over this boss (0 = it is not). */
+function hornUntilOf(boss: BossRow): number {
+  return Number((boss.params as { hornUntil?: unknown } | null)?.hornUntil) || 0;
+}
+
+/** True when Smelling Salts were taken during the wait that began at `from`
+ *  and would have ended at `until`: that wait is over. */
+function salted(kit: Kit, from: number | undefined, until: number): boolean {
+  return from !== undefined && kit.saltsAt >= from && kit.saltsAt < until;
+}
+
+/** A fighter's kit with the Steady Hand's forgiven slips taken off. */
+function kitAfterSlips(kit: Kit, slips: number | undefined): Kit {
+  return slips ? { ...kit, slipsLeft: Math.max(0, kit.slipsLeft - slips) } : kit;
 }
 
 /** The click-damage knobs for a boss — snapshotted onto `params` at spawn,
@@ -343,6 +408,8 @@ function maybeLazyResolve() {
 export async function getBossState(
   discordId?: string | null,
   fresh?: { hp: number; dealt: number; slain: boolean; yourDamage: number; boss: BossRow },
+  /** The caller's kit, when it has it in hand (slips already taken off). */
+  kitInHand?: Kit,
 ): Promise<BossState> {
   const viewerIsAdmin = isAdmin(discordId);
   const cfg = await getBossConfig();
@@ -390,15 +457,23 @@ export async function getBossState(
       myMeta = mine.meta;
       yourDamage = mine.damage;
       if (mine.settled) yourPayout = mine.payout;
-      const m = mine.meta as { stallUntil?: number; miniCdUntil?: number } | null;
-      const cd =
-        boss.mechanic === "weakpoint"
-          ? m?.stallUntil
-          : boss.mechanic === "miniarena"
-            ? m?.miniCdUntil
-            : undefined;
-      if ((cd ?? 0) > Date.now()) yourCooldownUntil = cd ?? null;
     }
+  }
+
+  // the viewer's shop gear: looked at, never spent, by a page load
+  let kit = kitInHand;
+  if (!kit && discordId && boss && live && !boss.slain) {
+    kit = kitAfterSlips(await loadKit(boss, discordId), (myMeta as HitMeta | null)?.sl);
+  }
+  if (!fresh && boss && myMeta) {
+    const m = myMeta as HitMeta;
+    const [from, cd] =
+      boss.mechanic === "weakpoint"
+        ? [m.stallFrom, m.stallUntil ?? 0]
+        : boss.mechanic === "miniarena"
+          ? [m.miniCdFrom, m.miniCdUntil ?? 0]
+          : [undefined, 0];
+    if (cd > Date.now() && !(kit && salted(kit, from, cd))) yourCooldownUntil = cd;
   }
 
   const clk = boss
@@ -434,7 +509,7 @@ export async function getBossState(
     })),
     yourDamage: Math.round(yourDamage * 10) / 10,
     yourPayout,
-    cpsCap: clk.maxCps,
+    cpsCap: clk.maxCps + (kit?.on.includes("swift-gauntlets") ? SWIFT_CPS : 0),
     dmgPerClick: clk.dmgPerClick,
     rewardPool: boss?.rewardPool ?? cfg.rewardPool,
     penaltyEach: capPenalty(boss?.penalty ?? cfg.penalty),
@@ -448,7 +523,7 @@ export async function getBossState(
             return {
               slots: w.slots,
               sacIntervalMs: w.sacIntervalMs,
-              sacTtlMs: w.sacTtlMs,
+              sacTtlMs: w.sacTtlMs * (kit?.on.includes("lancers-eye") ? LANCERS_EYE_TTL : 1),
               dmgPerSac: w.dmgPerSac,
               missDmg: w.missDmg,
               comboStep: w.comboStep,
@@ -463,7 +538,9 @@ export async function getBossState(
         ? { games: ["typing", "aim", "litany"] }
         : undefined,
     yourCooldownUntil,
-    combo: boss ? comboFromMeta(boss, myMeta) : undefined,
+    combo: boss ? comboFromMeta(boss, myMeta, kit) : undefined,
+    kit: live ? kit : undefined,
+    hornUntil: boss && live ? hornUntilOf(boss) : 0,
     blurb: boss?.blurb ?? "",
     image: boss?.image ?? "/boss/veyrath-idle",
     adminOnly: boss?.adminOnly ?? false,
@@ -539,13 +616,23 @@ async function commitDamage(
   actions: number,
   now: number,
   meta?: Prisma.InputJsonValue,
+  /** The fighter's shop gear, and `flat` for damage no gear multiplies (a
+   *  Firebomb burns a fixed share of the boss). */
+  kit?: Kit,
+  flat = false,
 ): Promise<{ state: BossState; applied: number }> {
   // the sword: more damage, whatever the boss and however it is fought
-  if (dmg > 0) {
+  if (dmg > 0 && !flat) {
     const gear = await getGear(discordId);
     if (gear.power > 0 || gear.perks.includes("sword")) {
       dmg = withPower(dmg, gear, now - (await firstStrikeMs(boss.id, discordId, now)));
     }
+    // the shop's gear: whetstone, mark, a draught, and a horn sounded by anyone
+    dmg *= kitMult(kit ?? NO_KIT, {
+      hpShare: Math.max(0, boss.maxHp - boss.dealtDamage) / Math.max(1, boss.maxHp),
+      hornUntil: hornUntilOf(boss),
+      now,
+    });
   }
   if (dmg <= 0 && actions <= 0) {
     if (meta !== undefined) {
@@ -555,7 +642,7 @@ async function commitDamage(
         update: { meta, lastHitAt: new Date(now) },
       });
     }
-    return { state: await getBossState(discordId), applied: 0 };
+    return { state: await getBossState(discordId, undefined, kit), applied: 0 };
   }
 
   const updated = await prisma.boss.update({
@@ -593,13 +680,17 @@ async function commitDamage(
   });
 
   const dealt = Math.min(updated.dealtDamage, boss.maxHp);
-  const state = await getBossState(discordId, {
-    hp: Math.max(0, boss.maxHp - dealt),
-    dealt,
-    slain,
-    yourDamage: mine.damage,
-    boss: { ...boss, dealtDamage: updated.dealtDamage, slain },
-  });
+  const state = await getBossState(
+    discordId,
+    {
+      hp: Math.max(0, boss.maxHp - dealt),
+      dealt,
+      slain,
+      yourDamage: mine.damage,
+      boss: { ...boss, dealtDamage: updated.dealtDamage, slain },
+    },
+    kit,
+  );
   return { state, applied: actions };
 }
 
@@ -613,9 +704,20 @@ async function clickBoss(
   body: unknown,
 ): Promise<HitResult> {
   const cfg = await getBossConfig();
-  const { dmgPerClick, maxCps } = clickerParams(boss, cfg);
+  const base = clickerParams(boss, cfg);
+  const { dmgPerClick } = base;
   const key = `${boss.id}:${discordId}`;
   const now = Date.now();
+  const b = (body ?? {}) as { clicks?: unknown; rest?: unknown; kv?: unknown };
+  const requested = Math.max(0, Math.floor(Number(b.clicks) || 0));
+
+  // the shop's gear. Striking is what arms the carried pieces, so an empty
+  // batch only looks.
+  const kit0 = await loadKit(boss, discordId, {
+    arm: requested > 0,
+    atLeast: Number(b.kv) || 0,
+  });
+  const maxCps = base.maxCps + (kit0.on.includes("swift-gauntlets") ? SWIFT_CPS : 0);
 
   let lastMs = lastHitMs.get(key);
   let meta = clickMeta.get(key);
@@ -633,9 +735,8 @@ async function clickBoss(
   // what the cap allows for the time since the last batch, plus two seconds'
   // worth: batches from a slow connection arrive late and bunched together
   const budget = Math.ceil(maxCps * elapsedSec) + maxCps * 2;
-  const b = (body ?? {}) as { clicks?: unknown; rest?: unknown };
-  const requested = Math.max(0, Math.floor(Number(b.clicks) || 0));
-  const applied = Math.min(requested, budget);
+  // the draught wearing off: nothing lands
+  const applied = resting(kit0, now) ? 0 : Math.min(requested, budget);
 
   if (requested >= 30 && requested > budget * 5) {
     flagAttempt(discordId, SECTION, "autoclicker suspected", {
@@ -648,11 +749,20 @@ async function clickBoss(
   lastHitMs.set(key, now);
 
   if (applied <= 0) {
-    return { ok: true, state: await getBossState(discordId), applied: 0 };
+    return {
+      ok: true,
+      state: await getBossState(discordId, undefined, kitAfterSlips(kit0, meta.sl)),
+      applied: 0,
+    };
   }
 
   // --- the combo: what this boss rewards, worked out from the batch alone ---
   const next: HitMeta = { ...meta };
+  // a Second Breath taken since the last batch fills the combo to the top
+  const filled = kit0.fillAt > (meta.fillSeen ?? 0);
+  if (filled) next.fillSeen = kit0.fillAt;
+  const hold = hourHolds(kit0, now);
+  let slips = meta.sl ?? 0;
   /** the batch in plain clicks' worth, after heavy blows */
   let worth = applied;
   let comboMult = 1;
@@ -663,19 +773,27 @@ async function clickBoss(
   if (kind === "momentum") {
     // pace over the whole gap, so a pause shows up as a slow batch
     const rate = applied / clamp(gapMs / 1000, 0.5, 120);
-    next.mo = momentumStep(meta.mo ?? 0, rate, maxCps, clamp(gapMs / 1000, 0.05, 120));
+    // Kindling: the gauge never falls below half
+    const floor = kit0.on.includes("kindling") ? KINDLING_FLOOR : 0;
+    const was = filled ? 1 : Math.max(floor, meta.mo ?? 0);
+    const stepped = momentumStep(was, rate, maxCps, clamp(gapMs / 1000, 0.05, 120));
+    // the Stopped Hour: it cannot fall at all
+    next.mo = Math.max(floor, hold ? Math.max(was, stepped) : stepped);
     comboMult = withFocus(momentumMult(next.mo), gear);
   } else if (kind === "breath") {
     // a fighter's first batch has no history to measure a rest against, so
     // it starts with room for one
-    const br = meta.br ?? { bank: REST_BANK_MS, blows: 0, mult: 1 };
+    const br0 = meta.br ?? { bank: REST_BANK_MS, blows: 0, mult: 1 };
+    const br = filled ? { ...br0, blows: BREATH.blows, mult: 1 + BREATH.maxBonus } : br0;
+    // Deep Lungs: a full breath in less time
+    const fullMs = kit0.on.includes("deep-lungs") ? DEEP_LUNGS_FULL_MS : BREATH.fullMs;
     // a rest has to fit in the time that really passed, less the least time
     // these clicks could have taken — nobody rests and strikes at once
     const need = (applied / maxCps) * 1000;
     const bank = Math.min(REST_BANK_MS, br.bank + gapMs);
     const claimed = clamp(Number(b.rest) || 0, 0, 60_000);
     const rest = Math.min(claimed, Math.max(0, bank - need + 300)); // + a little jitter
-    const held = betterBreath({ blows: br.blows, mult: br.mult }, breathFrom(rest));
+    const held = betterBreath({ blows: br.blows, mult: br.mult }, breathFrom(rest, fullMs));
     const heavy = Math.min(applied, held.blows);
     worth = heavy * withFocus(held.mult, gear) + (applied - heavy);
     next.br = {
@@ -686,19 +804,30 @@ async function clickBoss(
   }
 
   if (boss.mechanic === "eclipse") {
+    const ecfg = eclipseConfig(boss.params);
     const ph = eclipsePhaseAt(
-      eclipseConfig(boss.params),
+      ecfg,
       boss.spawnsAt.toISOString(),
       boss.spawnsAt.getTime(),
       now,
     );
-    phaseMult = ph.mult;
+    // the Eclipse Shard: blows in the light land as they do in the dusk
+    const shard = kit0.on.includes("eclipse-shard");
+    phaseMult = ph.kind === "light" && shard ? Math.max(ph.mult, ecfg.neutralMult) : ph.mult;
 
-    const co = meta.co ?? { stacks: 0, phase: -1, strikes: 0, done: false };
+    const co0 = meta.co ?? { stacks: 0, phase: -1, strikes: 0, done: false };
+    const co = filled ? { ...co0, stacks: CORONA.max } : co0;
     comboMult = withFocus(coronaMult(co.stacks), gear); // what they held coming into this batch
     let { stacks, phase, strikes, done } = co;
     if (ph.kind === "light" && ph.sinceMs > CORONA.lightGraceMs + comboGrace(gear)) {
-      stacks = 0; // struck in the light: every corona burns away
+      // struck in the light: every corona burns away, unless the gear holds them
+      if (shard || hold) {
+        // held
+      } else if (stacks > 0 && slips < kit0.slipsLeft) {
+        slips += 1; // the Steady Hand forgives this one
+      } else {
+        stacks = 0;
+      }
     } else if (ph.kind === "dark") {
       if (phase !== ph.index) {
         phase = ph.index;
@@ -714,9 +843,11 @@ async function clickBoss(
     next.co = { stacks, phase, strikes, done };
   }
 
+  if (slips > 0) next.sl = slips;
   clickMeta.set(key, next);
   if (clickMeta.size > 5000) clickMeta.clear();
 
+  const kit = kitAfterSlips(kit0, slips);
   const dmg = worth * dmgPerClick * phaseMult * comboMult;
   const { state, applied: a } = await commitDamage(
     boss,
@@ -725,8 +856,9 @@ async function clickBoss(
     applied,
     now,
     next as Prisma.InputJsonValue,
+    kit,
   );
-  return { ok: true, state: { ...state, combo: comboFromMeta(boss, next) }, applied: a };
+  return { ok: true, state: { ...state, combo: comboFromMeta(boss, next, kit) }, applied: a };
 }
 
 /** A fighter who sends nothing for this long has dropped the combo. Looser
@@ -743,12 +875,12 @@ async function strikeWeakpoint(
   boss: BossRow,
   body: unknown,
 ): Promise<HitResult> {
-  const p = weakpointConfig(boss.params);
+  const p0 = weakpointConfig(boss.params);
   const key = `${boss.id}:${discordId}`;
   const now = Date.now();
   const spawnMs = boss.spawnsAt.getTime();
 
-  const b = (body ?? {}) as { seq?: unknown; sacHits?: unknown; misses?: unknown };
+  const b = (body ?? {}) as { seq?: unknown; sacHits?: unknown; misses?: unknown; kv?: unknown };
   const seq =
     typeof b.seq === "string"
       ? cleanSeq(b.seq)
@@ -768,24 +900,53 @@ async function strikeWeakpoint(
 
   const meta = (existing?.meta ?? {}) as HitMeta;
   const gear = await getGear(discordId);
+
+  // the shop's gear. Lancing is what arms the carried pieces.
+  const kit0 = await loadKit(boss, discordId, { arm: seq.length > 0, atLeast: Number(b.kv) || 0 });
+  // the Lancer's Eye: every growth stays open longer
+  const p = kit0.on.includes("lancers-eye")
+    ? { ...p0, sacTtlMs: p0.sacTtlMs * LANCERS_EYE_TTL }
+    : p0;
+  const lure = (i: number) => lured(kit0.lures, spawnMs, p.sacIntervalMs, i);
+  const hold = hourHolds(kit0, now);
+  let slips = meta.sl ?? 0;
+  /** The combo would break here. True when the gear holds it instead. */
+  const held = (): boolean => {
+    if (hold) return true;
+    if (combo > 0 && slips < kit0.slipsLeft) {
+      slips += 1; // the Steady Hand forgives this one
+      return true;
+    }
+    return false;
+  };
+
   let missStreak = meta.missStreak ?? 0;
   let stallUntil = meta.stallUntil ?? 0;
+  let stallFrom = meta.stallFrom;
+  // Smelling Salts taken during this stall ended it
+  if (stallUntil > now && salted(kit0, stallFrom, stallUntil)) stallUntil = 0;
   let spared = meta.spared ?? false;
-  let combo =
-    now - lastMs > COMBO_IDLE_SERVER_MS + comboGrace(gear) ? 0 : Math.max(0, meta.combo ?? 0);
+  let combo = Math.max(0, meta.combo ?? 0);
+  if (now - lastMs > COMBO_IDLE_SERVER_MS + comboGrace(gear) && !held()) combo = 0;
+  // a Second Breath taken since the last flush: the combo at its peak
+  const filled = kit0.fillAt > (meta.fillSeen ?? 0);
+  if (filled) combo = Math.max(combo, streakPeak(p));
 
   const elapsedSec = clamp((now - lastMs) / 1000, 0.05, 5);
   let credited = 0;
   let dmg = 0;
 
-  if (stallUntil > now) {
-    combo = 0; // the rot has their arm; nothing lands
+  if (resting(kit0, now)) {
+    // the draught wearing off: nothing lands, nothing is lost
+  } else if (stallUntil > now) {
+    if (!hold) combo = 0; // the rot has their arm; nothing lands
   } else {
     const offered = offeredByKind(
       p,
       boss.spawnsAt.toISOString(),
       lastMs - spawnMs,
       now - spawnMs,
+      lure,
     );
     const budget = Math.ceil(p.maxSacsPerSec * elapsedSec) + p.maxSacsPerSec;
     // a grazing swing pays a little, but only a couple a second: flailing at
@@ -799,7 +960,7 @@ async function strikeWeakpoint(
       if (ch === "m") {
         if (misses < grazeBudget) dmg += p.missDmg;
         misses += 1;
-        combo = 0;
+        if (!held()) combo = 0;
         continue;
       }
       claimed += 1;
@@ -830,25 +991,41 @@ async function strikeWeakpoint(
       if (skipsFirstStall(gear) && !spared) {
         spared = true; // the legendary gauntlets shrug off the first one
       } else {
+        stallFrom = now;
         stallUntil = now + withHaste(p.stallMs, gear);
         credited = 0; // the rot bites this flush
         dmg = 0;
-        combo = 0;
+        if (!hold) combo = 0;
       }
     }
   }
 
+  const next: HitMeta = {
+    missStreak,
+    stallUntil,
+    combo,
+    ...(stallFrom !== undefined ? { stallFrom } : {}),
+    ...(spared ? { spared } : {}),
+    ...(slips > 0 ? { sl: slips } : {}),
+    ...(filled ? { fillSeen: kit0.fillAt } : meta.fillSeen ? { fillSeen: meta.fillSeen } : {}),
+  };
+  const kit = kitAfterSlips(kit0, slips);
   const { state, applied } = await commitDamage(
     boss,
     discordId,
     dmg,
     credited,
     now,
-    { missStreak, stallUntil, combo, ...(spared ? { spared } : {}) } as Prisma.InputJsonValue,
+    next as Prisma.InputJsonValue,
+    kit,
   );
   return {
     ok: true,
-    state: { ...state, yourCooldownUntil: stallUntil > now ? stallUntil : null },
+    state: {
+      ...state,
+      yourCooldownUntil: stallUntil > now ? stallUntil : null,
+      combo: comboFromMeta(boss, next, kit),
+    },
     applied,
   };
 }
@@ -884,33 +1061,174 @@ export async function applyMiniDamage(
     where: { bossId_discordId: { bossId: boss.id, discordId } },
     select: { meta: true },
   });
-  const th = ((row?.meta ?? {}) as HitMeta).th ?? { chain: 0, recent: [] };
+  const was = (row?.meta ?? {}) as HitMeta;
+  const now = Date.now();
+  // the shop's gear: a finished trial is the fighter joining the fight
+  const kit0 = await loadKit(boss, discordId, { arm: true });
+  const filled = kit0.fillAt > (was.fillSeen ?? 0);
+  const th0 = was.th ?? { chain: 0, recent: [] };
+  // a Second Breath taken since the last trial: every thread in hand
+  const th = filled ? { ...th0, chain: THREADS.max } : th0;
+  let slips = was.sl ?? 0;
+
   const kept = run.ok && keepsThread(th.recent, run.game);
   const mult = kept ? withFocus(threadsMult(th.chain), await getGear(discordId)) : 1;
-  const next = {
-    chain: !run.ok ? 0 : kept ? Math.min(THREADS.max, th.chain + 1) : 1,
-    recent: [...th.recent, run.game].slice(-2),
-  };
+  let chain: number;
+  if (kept) {
+    chain = Math.min(THREADS.max, th.chain + 1);
+  } else if (hourHolds(kit0, now)) {
+    chain = th.chain; // the Stopped Hour: nothing cuts the thread
+  } else if (th.chain > 0 && slips < kit0.slipsLeft) {
+    slips += 1; // the Steady Hand forgives this one
+    chain = th.chain;
+  } else {
+    chain = run.ok ? 1 : 0;
+  }
+  const next = { chain, recent: [...th.recent, run.game].slice(-2) };
 
   const clean = Math.max(0, Number.isFinite(dmg) ? dmg : 0) * mult;
-  const meta: HitMeta = { miniCdUntil: cooldownUntil, th: next };
+  const meta: HitMeta = {
+    miniCdUntil: cooldownUntil,
+    miniCdFrom: now,
+    th: next,
+    ...(slips > 0 ? { sl: slips } : {}),
+    ...(filled ? { fillSeen: kit0.fillAt } : was.fillSeen ? { fillSeen: was.fillSeen } : {}),
+  };
+  const kit = kitAfterSlips(kit0, slips);
   const { state } = await commitDamage(
     boss,
     discordId,
     clean,
     clean > 0 ? 1 : 0,
-    Date.now(),
+    now,
     meta as Prisma.InputJsonValue,
+    kit,
   );
   return {
     state: {
       ...state,
       yourCooldownUntil: cooldownUntil > Date.now() ? cooldownUntil : null,
-      combo: comboFromMeta(boss, meta),
+      combo: comboFromMeta(boss, meta, kit),
     },
     dmg: clean,
     mult,
   };
+}
+
+// --- using gear from the arena ---------------------------------------
+
+export type UseResult =
+  | { ok: true; state: BossState }
+  | { ok: false; error: string; state: BossState };
+
+const USABLE = new Set<string>(USABLE_IDS);
+
+/**
+ * Use one piece of gear from the fighter's pack in the live raid: a
+ * consumable, or the War Horn. Refused, and nothing spent, when it would do
+ * nothing — the wrong boss, a draught already at work, nothing to clear.
+ */
+export async function spendInRaid(discordId: string, itemId: string): Promise<UseResult> {
+  const boss = await cachedLiveBoss(isAdmin(discordId));
+  const refuse = async (error: string, kit?: Kit): Promise<UseResult> => ({
+    ok: false,
+    error,
+    state: await getBossState(discordId, undefined, kit),
+  });
+  if (!boss || boss.slain) return refuse("There is no raid to use it in.");
+
+  const item = getShopGear(itemId);
+  if (!item || !USABLE.has(itemId)) return refuse("That can't be used in a raid.");
+  const combo = comboKindFor(boss.mechanic, boss.templateKey, boss.params);
+  if (!gearApplies(itemId, boss.mechanic, combo)) {
+    return refuse(`${item.name} does nothing against ${boss.name}.`);
+  }
+
+  const now = Date.now();
+  const row = await prisma.bossHit.findUnique({
+    where: { bossId_discordId: { bossId: boss.id, discordId } },
+    select: { meta: true },
+  });
+  const meta = (row?.meta ?? {}) as HitMeta;
+  // read afresh, whatever this instance remembers: the limits depend on it
+  const before = kitAfterSlips(
+    await loadKit(boss, discordId, { arm: true, atLeast: Infinity }),
+    meta.sl,
+  );
+
+  if (!before.carry.some((c) => c.id === itemId)) {
+    return refuse(`You have no ${item.name} in your pack.`, before);
+  }
+  if (item.category === "consumable") {
+    if (before.used >= USES_PER_RAID) {
+      return refuse(`${USES_PER_RAID} consumables to a raid, and you have used them.`, before);
+    }
+    if (before.nextUseAt > now) {
+      const s = Math.ceil((before.nextUseAt - now) / 1000);
+      return refuse(`Too soon after the last one. Wait ${s}s.`, before);
+    }
+  }
+  if ((itemId === "flask-of-fury" || itemId === "berserkers-draught" || itemId === "blood-pact") && before.draughtUntil > now) {
+    return refuse("A draught is already at work. Let it run out first.", before);
+  }
+  if (itemId === "stopped-hour" && before.hourUntil > now) {
+    return refuse("The hour is already stopped.", before);
+  }
+  if (itemId === "smelling-salts") {
+    const stalled =
+      boss.mechanic === "weakpoint" &&
+      (meta.stallUntil ?? 0) > now &&
+      !salted(before, meta.stallFrom, meta.stallUntil ?? 0);
+    const cooling =
+      boss.mechanic === "miniarena" &&
+      (meta.miniCdUntil ?? 0) > now &&
+      !salted(before, meta.miniCdFrom, meta.miniCdUntil ?? 0);
+    const spent = before.restUntil > now && now >= before.restUntil - BERSERK_REST_MS;
+    if (!stalled && !cooling && !spent) {
+      return refuse("There is nothing to clear right now.", before);
+    }
+  }
+
+  if (!(await spendFromPack(discordId, itemId, boss.id, now))) {
+    return refuse(`You have no ${item.name} in your pack.`, before);
+  }
+  bustKit(boss.id, discordId);
+  logger.info("boss.gear_used", { discordId, bossId: boss.id, itemId });
+
+  if (itemId === "war-horn") {
+    // every fighter, for half an hour; a second horn adds to the first
+    const live = await prisma.boss.findUnique({ where: { id: boss.id }, select: { params: true } });
+    const params = (live?.params ?? {}) as Record<string, unknown>;
+    const until = Math.max(now, Number(params.hornUntil) || 0) + HORN_MS;
+    await prisma.boss.update({
+      where: { id: boss.id },
+      data: { params: { ...params, hornUntil: until } as Prisma.InputJsonValue },
+    });
+    liveCache = null;
+    cache = null;
+  }
+
+  const after = kitAfterSlips(
+    await loadKit(boss, discordId, { arm: true, atLeast: Infinity }),
+    meta.sl,
+  );
+
+  if (itemId === "firebomb") {
+    // a fixed share of the boss's full health, whatever else is at work
+    const { state } = await commitDamage(
+      boss,
+      discordId,
+      boss.maxHp * FIREBOMB_SHARE,
+      1,
+      now,
+      undefined,
+      after,
+      true,
+    );
+    return { ok: true, state: { ...state, combo: comboFromMeta(boss, meta, after) } };
+  }
+
+  return { ok: true, state: await getBossState(discordId, undefined, after) };
 }
 
 /**
@@ -991,6 +1309,9 @@ export async function resolveBoss(bossId?: string): Promise<ResolveResult> {
   let totalPaid = 0;
   let unsettled = 0;
 
+  // who carried a Warding Charm, and who swore a Blood Pact (a failed raid only)
+  const marks = boss.slain || pending.length === 0 ? null : await raidMarks(boss.id);
+
   for (let i = 0; i < pending.length; i++) {
     const h = pending[i];
     let amount: number;
@@ -1009,7 +1330,12 @@ export async function resolveBoss(bossId?: string): Promise<ResolveResult> {
       // the chestplate: a smaller penalty, or none at all for the legendary
       // one when the boss was nearly down
       const hpLeft = Math.max(0, boss.maxHp - boss.dealtDamage) / Math.max(1, boss.maxHp);
-      amount = -withWard(capPenalty(boss.penalty), await getGear(h.discordId), hpLeft);
+      const mark = marks?.get(h.discordId);
+      // the Warding Charm: nothing is lost. A Blood Pact doubles what is.
+      const owed = mark?.ward
+        ? 0
+        : withWard(capPenalty(boss.penalty), await getGear(h.discordId), hpLeft);
+      amount = -(mark?.pact ? owed * 2 : owed);
       reason = `${boss.name} escaped — raid penalty`;
       target = "cash";
     }

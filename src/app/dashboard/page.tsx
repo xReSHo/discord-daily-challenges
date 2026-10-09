@@ -37,6 +37,8 @@ import { PageHero } from "@/components/PageHero";
 import { ENTER_CLIPS, type ArtKey } from "@/lib/art";
 import { BossCountdown } from "./BossCountdown";
 import { TrialGate } from "./TrialGate";
+import { SecondChance } from "./SecondChance";
+import { SECOND_CHANCE_SECTIONS, charmCount } from "@/lib/shop/charms";
 import styles from "./dashboard.module.css";
 
 function bossTimeLeft(expiresAt: string): string {
@@ -207,6 +209,14 @@ export default async function Dashboard() {
     getGeodashEconomy(),
   ]);
   const doneCount = sectionIds.filter((id) => outcomes.get(id)?.state === "done").length;
+  // lost trials a Second Chance would reopen; the pack is only read if there are any
+  const reopenable = sectionIds.filter(
+    (id) =>
+      SECOND_CHANCE_SECTIONS.includes(id) &&
+      outcomes.get(id)?.state === "failed" &&
+      !disabledSections.has(id),
+  );
+  const chances = discordId && reopenable.length > 0 ? await charmCount(discordId, "second-chance") : 0;
 
   return (
     <AppFrame flow="/dashboard" raidAlert={false}>
@@ -332,6 +342,13 @@ export default async function Dashboard() {
             );
           })}
         </div>
+
+        {chances > 0 && (
+          <SecondChance
+            count={chances}
+            trials={reopenable.map((id) => ({ id, label: SECTIONS[id].label }))}
+          />
+        )}
       </div>
     </AppFrame>
   );

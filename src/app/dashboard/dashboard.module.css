@@ -774,3 +774,48 @@
     transform: rotate(360deg);
   }
 }
+
+/* --- a Second Chance in the pack, and a trial to spend it on -------------- */
+
+.chance {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px 16px;
+  margin-top: clamp(18px, 3vh, 28px);
+  padding: 14px 18px;
+  border: 1px solid var(--line-gold);
+  border-radius: var(--r);
+  background: color-mix(in srgb, var(--gold) 5%, transparent);
+}
+
+.chanceLine {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink-dim);
+}
+
+.chanceLine svg {
+  color: var(--gold);
+  flex-shrink: 0;
+}
+
+.chanceBtns {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chanceBtns button {
+  min-height: 40px;
+}
+
+.chanceErr {
+  flex-basis: 100%;
+  text-align: center;
+  font-size: 12px;
+  color: var(--warn);
+}

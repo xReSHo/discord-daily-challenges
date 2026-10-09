@@ -103,9 +103,28 @@ export function sacSlot(seed: string, i: number, slots: number): number {
   return hashSeed(`${seed}:sac:${i}`) % slots;
 }
 
-/** Which kind sac #i is — an index into {@link SAC_KINDS}. */
-export function sacKind(seed: string, i: number): number {
+/** How much likelier a rare growth is under a Rot Lure (see kit-rules.ts). */
+const LURE_RARE = 3;
+const RARE_SHARE = SAC_KINDS.slice(1).reduce((n, k) => n + k.share, 0);
+/** What the rare kinds' shares are multiplied by under a lure. */
+const LURE_SCALE = Math.min(0.95, RARE_SHARE * LURE_RARE) / RARE_SHARE;
+
+/**
+ * Which kind sac #i is — an index into {@link SAC_KINDS}. Under a Rot Lure
+ * (`lure`) the same roll is read against shares that favour the rare kinds, so
+ * the server and the fighter's arena still agree on every growth.
+ */
+export function sacKind(seed: string, i: number, lure = false): number {
   const roll = mulberry32(hashSeed(`${seed}:kind:${i}`))();
+  if (lure) {
+    // rare kinds first, each at its lured share; whatever is left is plain
+    let edge = 0;
+    for (let k = SAC_KINDS.length - 1; k >= 1; k--) {
+      edge += SAC_KINDS[k].share * LURE_SCALE;
+      if (roll < edge) return k;
+    }
+    return 0;
+  }
   let edge = 0;
   for (let k = 0; k < SAC_KINDS.length; k++) {
     edge += SAC_KINDS[k].share;
@@ -113,6 +132,9 @@ export function sacKind(seed: string, i: number): number {
   }
   return 0;
 }
+
+/** Tells whether growth #i is under one fighter's Rot Lure. */
+export type Lured = (i: number) => boolean;
 
 /** What a combo of `combo` lances in a row multiplies damage by. */
 export function comboMult(cfg: WeakpointConfig, combo: number): number {
@@ -125,6 +147,7 @@ export function liveSacs(
   cfg: WeakpointConfig,
   seed: string,
   elapsedMs: number,
+  lure?: Lured,
 ): Sac[] {
   if (elapsedMs < 0) return [];
   const latest = Math.floor(elapsedMs / cfg.sacIntervalMs);
@@ -134,7 +157,7 @@ export function liveSacs(
   );
   const out: Sac[] = [];
   for (let i = earliest; i <= latest; i++) {
-    const kind = sacKind(seed, i);
+    const kind = sacKind(seed, i, lure?.(i));
     const bornMs = i * cfg.sacIntervalMs;
     const diesMs = bornMs + cfg.sacTtlMs * SAC_KINDS[kind].ttl;
     if (elapsedMs >= bornMs && elapsedMs < diesMs) {
@@ -154,6 +177,7 @@ export function offeredByKind(
   seed: string,
   fromMs: number,
   toMs: number,
+  lure?: Lured,
 ): number[] {
   const out = SAC_KINDS.map(() => 0);
   const from = Math.max(0, fromMs);
@@ -162,7 +186,7 @@ export function offeredByKind(
   const first = Math.max(0, Math.floor((from - cfg.sacTtlMs) / cfg.sacIntervalMs) + 1);
   const last = Math.floor(toMs / cfg.sacIntervalMs);
   // a window is a few seconds at most; the cap only guards a broken clock
-  for (let i = first; i <= last && i - first < 64; i++) out[sacKind(seed, i)] += 1;
+  for (let i = first; i <= last && i - first < 64; i++) out[sacKind(seed, i, lure?.(i))] += 1;
   return out;
 }
 
