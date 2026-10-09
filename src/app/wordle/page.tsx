@@ -1,11 +1,10 @@
 import { auth } from "@/auth";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Grid3x3 } from "lucide-react";
 import { getGameView } from "@/lib/wordle/game";
 import { isDevMode } from "@/lib/dev-mode";
 import { getChallengeDateString } from "@/lib/challenge-date";
-import { SECTIONS } from "@/lib/sections";
-import { getSectionStatus } from "@/lib/section-status";
+import { getSectionReward, getSectionStatus } from "@/lib/section-status";
 import { AppFrame } from "@/components/AppFrame";
 import { GameHeader } from "@/components/GameHeader";
 import { SectionClosed } from "@/components/SectionClosed";
@@ -16,21 +15,24 @@ export default async function WordlePage() {
   const discordId = session?.user?.discordId;
   if (!discordId) redirect("/");
 
-  const [view, devMode, status] = await Promise.all([
+  const [view, devMode, status, reward] = await Promise.all([
     getGameView(discordId),
     isDevMode(discordId),
     getSectionStatus("wordle"),
+    getSectionReward("wordle"),
   ]);
+  if (status.hidden) notFound();
 
   return (
-    <AppFrame back={{ href: "/dashboard", label: "All trials" }}>
+    <AppFrame>
+      <GameHeader
+        icon={Grid3x3}
+        title="Wordle"
+        reward={reward}
+        date={getChallengeDateString()}
+        art="wordle"
+      />
       <div className="container game-page">
-        <GameHeader
-          icon={Grid3x3}
-          title="Wordle"
-          reward={SECTIONS.wordle.reward}
-          date={getChallengeDateString()}
-        />
         <div className="game-stage">
           {status.disabled ? (
             <SectionClosed title="Wordle" note={status.note} />

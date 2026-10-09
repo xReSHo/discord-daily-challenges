@@ -1,67 +1,15 @@
-.bossBanner {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 16px 20px;
-  margin-bottom: 28px;
-  text-decoration: none;
-  transition: border-color 0.3s var(--ease), transform 0.3s var(--ease);
-}
-
-.bossBanner:hover {
-  border-color: var(--line-gold);
-  transform: translateY(-2px);
-}
-
-.bossIcon {
-  color: var(--bad-bright);
-  flex-shrink: 0;
-}
-
-.bossText {
-  flex: 1;
-  font-size: 13px;
-  color: var(--ink-dim);
-}
-
-.bossText strong {
-  color: var(--gold-bright);
-  font-weight: 600;
-}
-
-.bossMeta {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--ink-mute);
-  white-space: nowrap;
-}
-
-.head {
-  padding-block: 4px 40px;
-}
-
-.title {
-  margin-top: 12px;
-  font-size: clamp(2rem, 5vw, 2.9rem);
-  line-height: 1.05;
-  letter-spacing: -0.01em;
-}
+/* --- banner: date, streak, today's tally --------------------------------- */
 
 .meta {
-  margin-top: 20px;
+  margin-top: 18px;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 8px 14px;
   flex-wrap: wrap;
   font-size: 11px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--ink-mute);
+  color: var(--ink-dim);
 }
 
 .sep {
@@ -88,75 +36,409 @@
   color: var(--bad-bright);
 }
 
-.grid {
-  display: grid;
-  gap: 16px;
-  grid-template-columns: 1fr;
+.tally {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r);
+  background: color-mix(in srgb, var(--bg) 66%, transparent);
+  backdrop-filter: blur(4px);
 }
 
-@media (min-width: 720px) {
-  .grid {
-    grid-template-columns: 1fr 1fr;
+.tallyNum {
+  font-family: var(--f-display);
+  font-size: 1.6rem;
+  line-height: 1;
+  color: var(--gold-bright);
+}
+
+.tallyNum small {
+  font-size: 0.6em;
+  color: var(--ink-mute);
+}
+
+.tallyLabel {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+/* --- a raid is on: the loudest thing on the page -------------------------- */
+
+.raid {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px clamp(16px, 2.6vw, 34px);
+  padding: clamp(16px, 2.2vw, 24px) clamp(18px, 2.6vw, 30px);
+  margin-bottom: clamp(26px, 3.4vw, 40px);
+  overflow: hidden;
+  color: inherit;
+  text-decoration: none;
+  border: 1px solid color-mix(in srgb, var(--bad) 70%, transparent);
+  border-radius: var(--r);
+  background: linear-gradient(90deg, rgba(40, 14, 8, 0.92), rgba(18, 12, 9, 0.9) 60%, rgba(18, 12, 9, 0.55));
+  box-shadow:
+    inset 0 1px 0 rgba(224, 138, 106, 0.18),
+    0 0 0 1px rgba(189, 90, 60, 0.18),
+    0 0 60px -18px rgba(189, 90, 60, 0.7);
+  transition:
+    transform 0.3s var(--ease),
+    box-shadow 0.3s var(--ease);
+  animation: raidGlow 2.8s ease-in-out infinite;
+}
+
+@keyframes raidGlow {
+  50% {
+    box-shadow:
+      inset 0 1px 0 rgba(224, 138, 106, 0.18),
+      0 0 0 1px rgba(189, 90, 60, 0.3),
+      0 0 80px -14px rgba(189, 90, 60, 0.95);
   }
 }
 
-.card {
+.raid:hover {
+  transform: translateY(-2px);
+}
+
+/* the raid's artwork, bleeding in from the right behind the words */
+.raidArt {
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: min(60%, 720px);
+  z-index: -1;
+  opacity: 0.6;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 75%);
+  mask-image: linear-gradient(90deg, transparent, #000 75%);
+}
+
+.raidArt img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.raidLive {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--f-display);
+  font-size: 12px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--bad-bright);
+  white-space: nowrap;
+}
+
+/* a beating ember */
+.raidLive i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--bad-bright);
+  animation: raidBeat 1.6s ease-out infinite;
+}
+
+@keyframes raidBeat {
+  0% {
+    box-shadow: 0 0 0 0 rgba(224, 138, 106, 0.7);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 12px rgba(224, 138, 106, 0);
+  }
+}
+
+.raidMain {
   display: flex;
   flex-direction: column;
-  padding: 26px;
-  min-height: 220px;
-  transition:
-    border-color 0.3s var(--ease),
-    transform 0.3s var(--ease);
+  gap: 8px;
+  min-width: 0;
 }
 
-.card:hover {
-  border-color: var(--line-gold);
-  transform: translateY(-3px);
+.raidName {
+  font-family: var(--f-display);
+  font-weight: 500;
+  font-size: clamp(1.1rem, 0.9rem + 0.9vw, 1.6rem);
+  letter-spacing: 0.08em;
+  color: var(--ink);
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.9);
 }
 
-.cardTop {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 20px;
-}
-
-.cardIcon {
-  color: var(--gold);
-  flex-shrink: 0;
-  padding: 9px;
+/* his health, as on the raid page */
+.raidHp {
+  display: block;
+  width: min(100%, 460px);
+  height: 7px;
+  background: rgba(8, 7, 6, 0.8);
   border: 1px solid var(--line-gold);
+  overflow: hidden;
+}
+
+.raidHp span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(180deg, #d9603c, #8c2f1a);
+  transform-origin: left;
+}
+
+.raidMeta {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-dim);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.9);
+}
+
+.raidMeta b {
+  font-weight: 600;
+  color: var(--gold-bright);
+}
+
+.raidMeta em {
+  font-style: normal;
+  font-weight: 600;
+  color: var(--bad-bright);
+}
+
+.raidCta {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  padding: 0 22px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #1a0d08;
+  background: linear-gradient(180deg, #eeaa8c, var(--bad-bright) 60%, #c56a4a);
   border-radius: var(--r);
-  background: color-mix(in srgb, var(--gold) 6%, transparent);
-  box-sizing: content-box;
+  white-space: nowrap;
+  box-shadow: 0 0 30px -8px rgba(224, 138, 106, 0.8);
 }
 
-.cardName {
-  font-size: 1.4rem;
+@media (max-width: 760px) {
+  .raid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .raidCta {
+    justify-content: center;
+  }
 }
 
-.cardBlurb {
-  margin-top: 6px;
+@media (prefers-reduced-motion: reduce) {
+  .raid,
+  .raidLive i {
+    animation: none;
+  }
+}
+
+/* --- the trials: a hall of banners ---------------------------------------- */
+
+/* A row of tall banners, each one a window onto its trial's picture, cut to a
+   pennant: clipped top corners and a point at the foot. The one under the
+   pointer widens and the others give way. */
+.gates {
+  --cut: 16px; /* the clipped top corners */
+  --point: 24px; /* depth of the point at the foot */
+  --shape: polygon(
+    var(--cut) 0,
+    calc(100% - var(--cut)) 0,
+    100% var(--cut),
+    100% calc(100% - var(--point)),
+    50% 100%,
+    0 calc(100% - var(--point)),
+    0 var(--cut)
+  );
+  display: flex;
+  flex-wrap: wrap;
+  gap: 52px clamp(12px, 1.6vw, 22px);
+  /* room for the medals standing out of the top */
+  padding-top: 34px;
+  margin-bottom: 12px;
+}
+
+.gate {
+  position: relative;
+  isolation: isolate;
+  flex: 1 1 0;
+  min-width: min(100%, 200px);
+  height: clamp(430px, 56vh, 600px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 50px clamp(16px, 2vw, 28px) calc(var(--point) + 18px);
+  text-align: center;
+  color: inherit;
+  text-decoration: none;
+  outline: none;
+  transition: flex-grow 0.7s var(--ease);
+}
+
+/* the frame: a gold edge in the banner's shape, the picture just inside it */
+.gateFrame {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  clip-path: var(--shape);
+  background: linear-gradient(180deg, var(--line-gold), var(--line-2) 30%, var(--line) 70%, var(--line-gold));
+  transition: background 0.5s var(--ease);
+}
+
+.gateArt {
+  position: absolute;
+  inset: 1px;
+  overflow: hidden;
+  clip-path: var(--shape);
+  background: var(--bg);
+}
+
+.gateImg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(0.8) brightness(0.62);
+  transform: scale(1.03);
+  transition:
+    transform 1.6s var(--ease),
+    filter 0.7s var(--ease);
+}
+
+/* dark at the head for the words and at the foot for the reward, the picture
+   showing through between */
+.gateShade {
+  position: absolute;
+  inset: 1px;
+  clip-path: var(--shape);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(10, 9, 8, 0.9) 0%,
+      rgba(10, 9, 8, 0.62) 30%,
+      rgba(10, 9, 8, 0.08) 52%,
+      rgba(10, 9, 8, 0.1) 66%,
+      rgba(10, 9, 8, 0.93) 100%
+    );
+  transition: opacity 0.6s var(--ease);
+}
+
+/* the trial's mark, in a ring standing half out of the top of the banner */
+.medal {
+  position: absolute;
+  top: -30px;
+  left: 50%;
+  translate: -50% 0;
+  display: grid;
+  place-items: center;
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  color: var(--gold-bright);
+  border: 1px solid var(--gold-deep);
+  background: radial-gradient(circle at 50% 30%, var(--raised), var(--bg) 78%);
+  box-shadow:
+    0 0 0 4px var(--bg),
+    0 0 0 5px var(--line-gold),
+    0 8px 22px -6px rgba(0, 0, 0, 0.9);
+  transition:
+    box-shadow 0.5s var(--ease),
+    translate 0.5s var(--ease);
+}
+
+.medalOrbit {
+  position: absolute;
+  inset: -11px;
+  border-radius: 50%;
+  border: 1px dashed color-mix(in srgb, var(--gold) 40%, transparent);
+  animation: gateTurn 50s linear infinite;
+}
+
+.medalOrbit::before {
+  content: "";
+  position: absolute;
+  top: -3px;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--gold-bright);
+  box-shadow: 0 0 8px var(--gold-glow);
+}
+
+@keyframes gateTurn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.gate :global(.stamp) {
+  background-color: color-mix(in srgb, var(--bg) 60%, transparent);
+  backdrop-filter: blur(4px);
+}
+
+/* the name, on a line of its own between two hairlines */
+.gateName {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin-top: 16px;
+  font-family: var(--f-display);
+  font-size: clamp(1.25rem, 1rem + 0.8vw, 1.7rem);
+  letter-spacing: 0.06em;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.9);
+}
+
+.gateName::before,
+.gateName::after {
+  content: "";
+  flex: 1;
+  min-width: 8px;
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--line-gold));
+}
+
+.gateName::after {
+  background: linear-gradient(to left, transparent, var(--line-gold));
+}
+
+.gateBlurb {
+  margin-top: 10px;
+  max-width: 34ch;
   font-size: 13px;
   line-height: 1.55;
-  color: var(--ink-mute);
-  max-width: 34ch;
+  color: var(--ink-dim);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.95);
 }
 
-.cardFoot {
+.gateFoot {
   margin-top: auto;
-  padding-top: 20px;
+  width: 100%;
+  max-width: 420px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  padding-top: 12px;
+  border-top: 1px solid color-mix(in srgb, var(--line-gold) 70%, transparent);
 }
 
 .enter {
   display: inline-flex;
   align-items: center;
   gap: 7px;
+  /* a full-height target on touch screens */
+  min-height: 28px;
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.2em;
@@ -165,9 +447,305 @@
   transition: color 0.25s var(--ease), gap 0.25s var(--ease);
 }
 
-.card:hover .enter {
+/* under the pointer (or keyboard focus): the picture wakes, the frame lights */
+.gate:hover .gateImg,
+.gate:focus-visible .gateImg {
+  transform: scale(1.1);
+  filter: saturate(1.05) brightness(1);
+}
+
+.gate:hover .gateFrame,
+.gate:focus-visible .gateFrame {
+  background: linear-gradient(180deg, var(--gold-bright), var(--gold-deep) 30%, var(--line-gold) 70%, var(--gold));
+}
+
+.gate:hover .gateShade,
+.gate:focus-visible .gateShade {
+  opacity: 0.86;
+}
+
+.gate:hover .medal,
+.gate:focus-visible .medal {
+  translate: -50% -4px;
+  box-shadow:
+    0 0 0 4px var(--bg),
+    0 0 0 5px var(--gold),
+    0 8px 22px -6px rgba(0, 0, 0, 0.9),
+    0 0 34px -2px var(--gold-glow);
+}
+
+.gate:hover .medalOrbit,
+.gate:focus-visible .medalOrbit {
+  animation-duration: 9s;
+}
+
+.gate:hover .enter,
+.gate:focus-visible .enter {
   color: var(--gold-bright);
-  gap: 11px;
+  gap: 12px;
+}
+
+/* a wide screen with a pointer: the banner being looked at takes more room */
+@media (hover: hover) and (min-width: 1000px) {
+  .gates {
+    flex-wrap: nowrap;
+  }
+  .gate {
+    min-width: 0;
+  }
+  .gates:hover .gate,
+  .gates:focus-within .gate {
+    flex-grow: 0.8;
+  }
+  .gates .gate:hover,
+  .gates .gate:focus-visible {
+    flex-grow: 1.45;
+  }
+}
+
+/* --- a trial that is over for the day ------------------------------------- */
+
+/* how it went, on a plaque across the picture */
+.verdict {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 340px;
+  margin-top: 18px;
+  padding: 14px 16px 16px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r);
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 18px 40px -22px rgba(0, 0, 0, 0.95);
+}
+
+.verdictHead {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 9px;
+  font-family: var(--f-display);
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.verdictHead small {
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--ink-mute);
+}
+
+.verdictFacts {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  width: 100%;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.verdictFacts > span {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding-inline: 6px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+.verdictFacts > span + span {
+  border-left: 1px solid var(--line);
+}
+
+.verdictFacts b {
+  font-family: var(--f-display);
+  font-size: 1.45rem;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums lining-nums;
+  white-space: nowrap;
+}
+
+.verdictWon {
+  border-color: color-mix(in srgb, var(--ok) 50%, transparent);
+  box-shadow:
+    0 18px 40px -22px rgba(0, 0, 0, 0.95),
+    0 0 40px -18px color-mix(in srgb, var(--ok-bright) 60%, transparent);
+}
+
+.verdictWon .verdictHead {
+  color: var(--ok-bright);
+}
+
+.verdictWon .verdictFacts > span:last-child b {
+  color: var(--gold-bright);
+}
+
+.verdictLost {
+  border-color: color-mix(in srgb, var(--bad) 55%, transparent);
+  box-shadow:
+    0 18px 40px -22px rgba(0, 0, 0, 0.95),
+    0 0 40px -18px color-mix(in srgb, var(--bad-bright) 55%, transparent);
+}
+
+.verdictLost .verdictHead {
+  color: var(--bad-bright);
+}
+
+.verdictLost .verdictFacts b {
+  color: var(--ink-dim);
+}
+
+/* when the trial comes back */
+.returns {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+.returns svg {
+  color: var(--gold-deep);
+}
+
+.returns b {
+  font-family: var(--f-mono);
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+}
+
+/* bested: the picture rests, the frame and medal turn to the colour of a
+   thing done */
+.gateDone .gateImg {
+  filter: saturate(0.5) brightness(0.52);
+}
+
+.gateDone .gateFrame {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--ok) 70%, var(--line-gold)),
+    var(--line-2) 30%,
+    var(--line) 70%,
+    color-mix(in srgb, var(--ok) 45%, var(--line))
+  );
+}
+
+.gateDone .medal {
+  color: var(--ok-bright);
+  border-color: var(--ok);
+  box-shadow:
+    0 0 0 4px var(--bg),
+    0 0 0 5px color-mix(in srgb, var(--ok) 60%, transparent),
+    0 0 26px -4px color-mix(in srgb, var(--ok-bright) 55%, transparent);
+}
+
+/* lost: the colour drains and the frame goes the red of an ember */
+.gateFailed .gateImg,
+.gateFailed:hover .gateImg {
+  filter: grayscale(0.75) brightness(0.42);
+}
+
+.gateFailed .gateFrame,
+.gateFailed:hover .gateFrame {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--bad) 75%, var(--line)),
+    var(--line-2) 30%,
+    var(--line) 70%,
+    color-mix(in srgb, var(--bad) 50%, var(--line))
+  );
+}
+
+.gateFailed .medal {
+  color: var(--bad-bright);
+  border-color: var(--bad);
+  box-shadow:
+    0 0 0 4px var(--bg),
+    0 0 0 5px color-mix(in srgb, var(--bad) 55%, transparent),
+    0 8px 22px -6px rgba(0, 0, 0, 0.9);
+}
+
+.gateDone .medalOrbit,
+.gateFailed .medalOrbit {
+  animation: none;
+  border-color: color-mix(in srgb, currentColor 35%, transparent);
+}
+
+.gateDone .medalOrbit::before,
+.gateFailed .medalOrbit::before {
+  display: none;
+}
+
+/* taken offline: drained of colour */
+.gateClosed .gateImg,
+.gateClosed:hover .gateImg {
+  filter: grayscale(1) brightness(0.42);
+}
+
+.gateClosed .medal {
+  color: var(--ink-faint);
+  border-color: var(--line-2);
+}
+
+.gateClosed .medalOrbit {
+  animation: none;
+  opacity: 0.5;
+}
+
+/* touch screens have no hover: show the art at fuller strength from the start */
+@media (hover: none) {
+  .gateImg {
+    filter: saturate(0.95) brightness(0.82);
+  }
+}
+
+/* a phone: the banners stack, shorter */
+@media (max-width: 640px) {
+  .gates {
+    --cut: 12px;
+    --point: 18px;
+    gap: 48px;
+  }
+  .gate {
+    flex: 1 1 100%;
+    height: clamp(330px, 52vh, 420px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .medalOrbit {
+    animation: none;
+  }
+  .gate,
+  .gateImg {
+    transition: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .tally {
+    justify-content: space-between;
+  }
 }
 
 .note {

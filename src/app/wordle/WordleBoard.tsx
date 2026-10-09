@@ -1,9 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { ArrowLeft, CornerDownLeft, Delete } from "lucide-react";
 import type { GameView } from "@/lib/wordle/game";
 import type { Mark } from "@/lib/wordle/evaluate";
 import type { CompleteResult } from "@/lib/completions";
+import { play } from "@/lib/sfx";
 import styles from "./wordle.module.css";
 
 const KEY_ROWS = ["qwertyuiop", "asdfghjkl", "zxcvbnm"];
@@ -77,6 +80,9 @@ export function WordleBoard({
       }
       applyView(data.view as GameView);
       setReward((data.reward as CompleteResult | null) ?? null);
+      const v = data.view as GameView;
+      if (v.status === "won") play("win");
+      else if (v.status === "lost") play("lose");
       setCurrent("");
     } catch {
       flashError("Network error - try again");
@@ -136,68 +142,119 @@ export function WordleBoard({
   const keyMarks = aggregateKeyMarks(view.rows);
   const activeRowIndex = playing ? view.rows.length : -1;
 
+  const guessNo = Math.min(view.rows.length + 1, view.maxGuesses);
+
   return (
-    <div className={styles.board}>
-      <div className={styles.grid}>
-        {Array.from({ length: view.maxGuesses }).map((_, rowIndex) => {
-          const filled = view.rows[rowIndex];
-          const isActive = rowIndex === activeRowIndex;
-          const letters = filled
-            ? filled.guess.split("")
-            : isActive
-              ? current.padEnd(5).split("")
-              : EMPTY_ROW;
-
-          const rowClass = [
-            styles.row,
-            isActive && shake ? styles.shake : "",
-            isActive && busy ? styles.pending : "",
-            rowIndex === revealRow ? styles.reveal : "",
-          ]
-            .filter(Boolean)
-            .join(" ");
-
-          return (
-            <div key={rowIndex} className={rowClass}>
-              {letters.map((ch, i) => {
-                const mark = filled?.marks[i];
-                const cls = [
-                  styles.tile,
-                  mark ? styles[mark] : "",
-                  !mark && ch.trim() ? styles.tileFilled : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ");
-                return (
-                  <div key={i} className={cls}>
-                    {ch.trim()}
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })}
+    <div
+      className={styles.board}
+      style={{ "--rows": view.maxGuesses } as React.CSSProperties}
+    >
+      {/* where the game stands: which guess this is, and a mark per guess */}
+      <div className={styles.status}>
+        <span className={styles.statusLabel}>
+          {playing ? (
+            <>
+              Guess <b>{guessNo}</b> of {view.maxGuesses}
+            </>
+          ) : view.status === "won" ? (
+            "Solved"
+          ) : (
+            "Out of guesses"
+          )}
+        </span>
+        <span className={styles.pips} aria-hidden="true">
+          {Array.from({ length: view.maxGuesses }).map((_, i) => {
+            const row = view.rows[i];
+            const cls = row
+              ? row.marks.every((m) => m === "correct")
+                ? styles.pipWon
+                : styles.pipUsed
+              : i === activeRowIndex
+                ? styles.pipNow
+                : "";
+            return <i key={i} className={`${styles.pip} ${cls}`} />;
+          })}
+        </span>
       </div>
 
-      <Banner
-        view={view}
-        reward={reward}
-        busy={busy}
-        onClaim={claimReward}
-        devMode={devMode}
-      />
-      <div className={styles.error}>{error}</div>
+      <div className={styles.gridWrap}>
+        {/* a problem with the guess, shown over the board and gone at the next key */}
+        <div className={`${styles.toast} ${error ? styles.toastOn : ""}`} role="status" aria-live="polite">
+          {error}
+        </div>
+        <div className={styles.grid}>
+          {Array.from({ length: view.maxGuesses }).map((_, rowIndex) => {
+            const filled = view.rows[rowIndex];
+            const isActive = rowIndex === activeRowIndex;
+            const letters = filled
+              ? filled.guess.split("")
+              : isActive
+                ? current.padEnd(5).split("")
+                : EMPTY_ROW;
+
+            const rowClass = [
+              styles.row,
+              isActive && shake ? styles.shake : "",
+              isActive && busy ? styles.pending : "",
+              rowIndex === revealRow ? styles.reveal : "",
+            ]
+              .filter(Boolean)
+              .join(" ");
+
+            return (
+              <div key={rowIndex} className={rowClass}>
+                {letters.map((ch, i) => {
+                  const mark = filled?.marks[i];
+                  const cls = [
+                    styles.tile,
+                    mark ? styles[mark] : "",
+                    !mark && ch.trim() ? styles.tileFilled : "",
+                    // the square the next letter will land in
+                    isActive && !busy && i === current.length ? styles.tileNext : "",
+                    isActive ? styles.tileLive : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ");
+                  return (
+                    <div key={i} className={cls}>
+                      {ch.trim()}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className={styles.result}>
+        <Banner view={view} reward={reward} busy={busy} onClaim={claimReward} devMode={devMode} />
+      </div>
+
+      <ul className={styles.legend}>
+        <li>
+          <span className={`${styles.swatch} ${styles.correct}`}>A</span> right place
+        </li>
+        <li>
+          <span className={`${styles.swatch} ${styles.present}`}>B</span> wrong place
+        </li>
+        <li>
+          <span className={`${styles.swatch} ${styles.absent}`}>C</span> not in the word
+        </li>
+      </ul>
 
       <div className={styles.keyboard}>
         {KEY_ROWS.map((rowKeys, r) => (
           <div key={r} className={styles.kbRow}>
             {r === 2 && (
               <button
-                className={`${styles.key} ${styles.keyWide}`}
+                className={`${styles.key} ${styles.keyWide} ${styles.keyEnter}`}
                 onClick={() => handleKey("enter")}
                 disabled={!canType}
+                aria-label="Enter"
               >
-                Enter
+                <CornerDownLeft size={16} />
+                <span>Enter</span>
               </button>
             )}
             {rowKeys.split("").map((ch) => {
@@ -220,7 +277,7 @@ export function WordleBoard({
                 disabled={!canType}
                 aria-label="Backspace"
               >
-                &#9003;
+                <Delete size={18} />
               </button>
             )}
           </div>
@@ -244,7 +301,11 @@ function Banner({
   devMode: boolean;
 }) {
   if (view.status === "in_progress") {
-    return <div className={styles.banner} />;
+    return (
+      <div className={`${styles.banner} ${styles.bannerIdle}`}>
+        <span className={styles.hint}>Type a five-letter word, then press Enter.</span>
+      </div>
+    );
   }
 
   return (
@@ -277,6 +338,9 @@ function Banner({
           <RewardLine view={view} reward={reward} busy={busy} onClaim={onClaim} />
         )
       )}
+      <Link href="/dashboard" className={styles.backLink}>
+        <ArrowLeft size={13} /> Back to the trials
+      </Link>
     </div>
   );
 }

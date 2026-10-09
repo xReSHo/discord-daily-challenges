@@ -1672,7 +1672,14 @@ function GeoRunStage({
 
     const jump = () => {
       if (doneRef.current) return;
-      const simTs = sRef.current.t * 1000;
+      // `sRef.current.t` is always exactly the end-time of the last *completed*
+      // step (jump() runs from an input event, never from inside the sim loop).
+      // Recording that value verbatim makes the server's replay — which scans
+      // steps from t=0 — attribute the jump to the step that just produced it,
+      // one step *before* where the live loop actually applies it (the live
+      // loop only ever checks pending jumps against the *upcoming* step's
+      // boundary). Recording the upcoming boundary instead keeps both in sync.
+      const simTs = (sRef.current.t + SIM_DT) * 1000;
       if (simTs - lastJumpSimRef.current < 60) return;
       if (orbGateRef.current.inside && orbGateRef.current.used) return;
       lastJumpSimRef.current = simTs;

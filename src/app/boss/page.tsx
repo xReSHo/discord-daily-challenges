@@ -14,12 +14,8 @@ export default async function BossPage() {
   const initial = await getBossState(discordId);
 
   return (
-    <AppFrame back={{ href: "/dashboard", label: "All trials" }}>
-      <div className="container game-page">
-        <div className="game-stage">
-          <BossArena initial={initial} />
-        </div>
-      </div>
+    <AppFrame raidAlert={false}>
+      <BossArena initial={initial} />
     </AppFrame>
   );
 }

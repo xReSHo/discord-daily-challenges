@@ -11,6 +11,8 @@
 import { prisma } from "@/lib/prisma";
 import { getChallengeDateString } from "@/lib/challenge-date";
 import { SECTION_IDS } from "@/lib/sections";
+import { getRequirements } from "@/lib/day-requirement";
+import { perfectDaysOf, type Requirements } from "@/lib/day-requirement-rule";
 
 const DAY_MS = 86_400_000;
 
@@ -56,27 +58,15 @@ export function streaksFromDays(days: Iterable<string>): {
 }
 
 /**
- * Group completion rows into `day -> set of sections cleared`, then return the
- * days on which *every* trial was cleared. Shared by getUserStreak and the
- * leaderboard.
+ * The days on which every trial required that day was cleared (see
+ * src/lib/day-requirement-rule.ts — the list changes when an admin switches
+ * games on or off). Shared by getUserStreak, the leaderboard and achievements.
  */
 export function perfectDays(
   rows: { date: Date; section: string }[],
+  requirements?: Requirements,
 ): string[] {
-  const bySection = new Map<string, Set<string>>();
-  for (const r of rows) {
-    const k = dayKey(r.date);
-    let set = bySection.get(k);
-    if (!set) {
-      set = new Set();
-      bySection.set(k, set);
-    }
-    set.add(r.section);
-  }
-  const need = SECTION_IDS.length;
-  return [...bySection.entries()]
-    .filter(([, sections]) => sections.size >= need)
-    .map(([day]) => day);
+  return perfectDaysOf(rows, requirements);
 }
 
 export type UserStreak = {
@@ -101,17 +91,20 @@ export async function getUserStreak(discordId: string): Promise<UserStreak> {
     Date.parse(`${getChallengeDateString()}T00:00:00.000Z`) -
       STREAK_LOOKBACK_DAYS * DAY_MS,
   );
-  const rows = await prisma.completion.findMany({
-    where: {
-      discordId,
-      rewarded: true,
-      section: { in: [...SECTION_IDS] },
-      date: { gte: since },
-    },
-    select: { date: true, section: true },
-  });
+  const [rows, requirements] = await Promise.all([
+    prisma.completion.findMany({
+      where: {
+        discordId,
+        rewarded: true,
+        section: { in: [...SECTION_IDS] },
+        date: { gte: since },
+      },
+      select: { date: true, section: true },
+    }),
+    getRequirements(since),
+  ]);
 
-  const perfect = perfectDays(rows);
+  const perfect = perfectDays(rows, requirements);
   const { current, longest } = streaksFromDays(perfect);
   return {
     current,

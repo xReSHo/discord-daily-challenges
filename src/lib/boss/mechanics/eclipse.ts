@@ -36,6 +36,10 @@ export type EclipsePhase = {
   /** ms until this phase flips. */
   endsInMs: number;
   nextKind: EclipseKind;
+  /** Which phase of the fight this is, counting from 0. */
+  index: number;
+  /** ms since this phase began. */
+  sinceMs: number;
 };
 
 // --- config parsing --------------------------------------------------
@@ -102,11 +106,25 @@ export function eclipsePhaseAt(
       kind === "neutral" ? (rng() < 0.5 ? "dark" : "light") : "neutral";
 
     if (elapsed < t + dur) {
-      return { kind, mult: multFor(cfg, kind), endsInMs: t + dur - elapsed, nextKind: next };
+      return {
+        kind,
+        mult: multFor(cfg, kind),
+        endsInMs: t + dur - elapsed,
+        nextKind: next,
+        index: i,
+        sinceMs: elapsed - t,
+      };
     }
     t += dur;
     kind = next;
   }
 
-  return { kind: "neutral", mult: cfg.neutralMult, endsInMs: 5000, nextKind: "dark" };
+  return {
+    kind: "neutral",
+    mult: cfg.neutralMult,
+    endsInMs: 5000,
+    nextKind: "dark",
+    index: -1,
+    sinceMs: 0,
+  };
 }

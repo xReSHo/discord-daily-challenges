@@ -1,0 +1,618 @@
+/* ============================================================
+   The crate: a wide card on the shop's front shelf (picture, the
+   offer, what can be inside), and the dialog an opening plays in.
+   The reel moves by transform only.
+   ============================================================ */
+
+/* the same rarity colours as the equipment page */
+.common {
+  --rc: #9a917f;
+}
+.uncommon {
+  --rc: #8fae6b;
+}
+.rare {
+  --rc: #6f9bc4;
+}
+.epic {
+  --rc: #a47cc9;
+}
+.legendary {
+  --rc: #ecca77;
+}
+
+.crate {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 200px) minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: clamp(18px, 3vw, 34px);
+  align-items: center;
+  margin-bottom: 34px;
+  padding: clamp(18px, 3vw, 30px);
+  background:
+    radial-gradient(60% 120% at 12% 50%, rgba(200, 162, 76, 0.1), transparent 70%),
+    linear-gradient(180deg, var(--panel), var(--panel-2));
+  border: 1px solid var(--line-gold);
+  border-radius: var(--r);
+}
+
+.crate::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -1px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold-bright) 50%, transparent);
+  opacity: 0.6;
+}
+
+/* ---------- the picture ---------- */
+.art {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  color: var(--gold);
+}
+
+.art img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 14px 22px rgba(0, 0, 0, 0.6));
+}
+
+.art svg {
+  width: 62%;
+  height: 62%;
+  filter: drop-shadow(0 0 18px var(--gold-glow));
+}
+
+.shelfArt {
+  width: 100%;
+  max-width: 200px;
+  justify-self: center;
+}
+
+/* ---------- the offer ---------- */
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.eyebrow {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.title {
+  font-family: var(--f-display);
+  font-size: clamp(1.5rem, 1.1rem + 1.4vw, 2.1rem);
+  font-weight: 400;
+  line-height: 1.05;
+  color: var(--ink);
+}
+
+.blurb {
+  max-width: 38ch;
+  font-family: var(--f-serif);
+  font-size: 1.02rem;
+  line-height: 1.55;
+  color: var(--ink-dim);
+}
+
+.buy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-top: 6px;
+}
+
+.price {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--f-mono);
+  font-size: 1.15rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--gold-bright);
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.9em 1.7em;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #1a1409;
+  background: linear-gradient(180deg, var(--gold-bright), var(--gold));
+  border: 1px solid var(--gold);
+  border-radius: var(--r);
+  cursor: pointer;
+  transition: box-shadow 0.25s var(--ease);
+}
+
+.button:hover:not(:disabled) {
+  box-shadow: 0 0 28px -6px var(--gold-glow);
+}
+
+.button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.confirm {
+  background: linear-gradient(180deg, #ffe9a6, var(--gold-bright));
+  box-shadow: 0 0 0 1px var(--gold-bright), 0 0 26px -4px var(--gold-glow);
+}
+
+.quiet {
+  padding: 0.8em 1.4em;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  background: transparent;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r);
+  cursor: pointer;
+}
+
+.quiet:hover {
+  color: var(--gold-bright);
+  border-color: var(--line-gold);
+}
+
+.locked {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+.note {
+  font-family: var(--f-mono);
+  font-size: 11.5px;
+  color: var(--ink-mute);
+}
+
+.error {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--bad-bright);
+}
+
+/* ---------- what can be inside ---------- */
+.inside {
+  min-width: 0;
+  padding-left: clamp(0px, 2vw, 26px);
+  border-left: 1px solid var(--line);
+}
+
+.insideHead {
+  margin-bottom: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+.odds {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.odds li {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto minmax(52px, auto) minmax(0, auto);
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 0;
+  font-size: 13px;
+  border-bottom: 1px solid var(--line);
+}
+
+.odds li:last-child {
+  border-bottom: 0;
+}
+
+.odds i {
+  width: 8px;
+  height: 8px;
+  align-self: center;
+  border-radius: 50%;
+  background: var(--rc, var(--line-2));
+  box-shadow: 0 0 8px -1px var(--rc, transparent);
+}
+
+.odds span {
+  color: var(--rc, var(--ink-mute));
+}
+
+.odds b {
+  font-family: var(--f-mono);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.odds small {
+  font-family: var(--f-mono);
+  font-size: 11px;
+  color: var(--ink-faint);
+  text-align: right;
+}
+
+.odds em {
+  font-style: normal;
+  font-family: var(--f-mono);
+  font-size: 11.5px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.more {
+  color: var(--ok-bright);
+}
+
+.less {
+  color: var(--ink-mute);
+}
+
+.even {
+  color: var(--gold-bright);
+}
+
+.rule {
+  margin-top: 12px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--ink-mute);
+}
+
+/* ---------- the opening ---------- */
+.stage {
+  width: min(680px, calc(100vw - 24px));
+  max-width: none;
+  margin: auto;
+  padding: 0;
+  font-family: var(--f-sans);
+  color: var(--ink);
+  background: linear-gradient(180deg, var(--panel), var(--bg-2));
+  border: 1px solid var(--line-gold);
+  border-radius: var(--r);
+  box-shadow: 0 40px 120px -20px #000;
+  overflow: hidden;
+}
+
+.stage::backdrop {
+  background: rgba(4, 3, 2, 0.82);
+  backdrop-filter: blur(3px);
+}
+
+.stageInner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  min-height: 380px;
+  padding: clamp(26px, 5vw, 40px) 0 clamp(22px, 4vw, 32px);
+}
+
+.close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  color: var(--ink-mute);
+  background: transparent;
+  border: 1px solid var(--line-2);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.close:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.waiting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  flex: 1;
+}
+
+.shaking {
+  width: 170px;
+  animation: rattle 0.42s ease-in-out infinite;
+}
+
+@keyframes rattle {
+  0%,
+  100% {
+    transform: rotate(0) translateY(0);
+  }
+  20% {
+    transform: rotate(-3.5deg) translateY(-2px);
+  }
+  45% {
+    transform: rotate(3deg) translateY(1px);
+  }
+  70% {
+    transform: rotate(-2deg) translateY(-1px);
+  }
+}
+
+/* the crate, thrown open, above the reel */
+.opened {
+  width: 120px;
+  margin-bottom: -8px;
+  animation: burst 0.6s var(--ease) both;
+}
+
+.opened img {
+  filter: drop-shadow(0 0 26px var(--gold-glow));
+}
+
+@keyframes burst {
+  from {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+.stageLine {
+  min-height: 1.4em;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+/* the strip of tiles, seen through a window with a needle at its middle */
+.window {
+  position: relative;
+  width: 100%;
+  padding: 14px 0;
+  overflow: hidden;
+  background: var(--bg-2);
+  border-block: 1px solid var(--line-2);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
+}
+
+.needle {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--gold-bright);
+  box-shadow: 0 0 12px 1px var(--gold-glow);
+}
+
+.reel {
+  display: flex;
+  column-gap: 8px;
+  width: max-content;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  transition-property: transform;
+  transition-timing-function: cubic-bezier(0.1, 0.72, 0.1, 1);
+  will-change: transform;
+}
+
+.tile {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 86px;
+  height: 86px;
+  color: var(--rc);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--rc) 16%, transparent), transparent 70%),
+    var(--panel-2);
+  border: 1px solid color-mix(in srgb, var(--rc) 45%, var(--line-2));
+  border-bottom: 3px solid var(--rc);
+  border-radius: var(--r);
+  transition: opacity 0.4s var(--ease), box-shadow 0.4s var(--ease);
+}
+
+.tile svg {
+  width: 34px;
+  height: 34px;
+}
+
+.blank {
+  --rc: #3a352c;
+  color: var(--ink-faint);
+  background: var(--bg);
+}
+
+/* once it has stopped, only the tile under the needle stays lit */
+.windowDone .tile {
+  opacity: 0.28;
+}
+
+.windowDone .won {
+  opacity: 1;
+  box-shadow: 0 0 0 1px var(--rc), 0 0 30px -2px var(--rc);
+}
+
+.verdict {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  min-height: 190px;
+  padding-inline: 20px;
+  text-align: center;
+}
+
+.result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  animation: rise 0.5s var(--ease) both;
+}
+
+.result small {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--rc);
+}
+
+.result strong {
+  font-family: var(--f-display);
+  font-size: clamp(1.3rem, 1rem + 1.2vw, 1.8rem);
+  font-weight: 400;
+  color: var(--rc, var(--ink-dim));
+}
+
+.result p {
+  max-width: 40ch;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink-dim);
+}
+
+.result p b {
+  color: var(--gold-bright);
+}
+
+.resultEmpty strong {
+  color: var(--ink-mute);
+}
+
+.piece {
+  display: grid;
+  place-items: center;
+  width: 112px;
+  height: 112px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--rc) 22%, transparent), transparent 70%);
+  border: 1px solid color-mix(in srgb, var(--rc) 55%, transparent);
+  border-radius: var(--r);
+}
+
+.piece img {
+  width: 88%;
+  height: 88%;
+  object-fit: contain;
+}
+
+.sum {
+  font-family: var(--f-mono);
+  font-size: 12px !important;
+  color: var(--ink-mute);
+}
+
+.sum.more {
+  color: var(--ok-bright);
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--gold-bright);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  padding-inline: 20px;
+}
+
+@media (max-width: 900px) {
+  .crate {
+    grid-template-columns: minmax(0, 130px) minmax(0, 1fr);
+  }
+
+  .inside {
+    grid-column: 1 / -1;
+    padding: 16px 0 0;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+}
+
+@media (max-width: 520px) {
+  .crate {
+    grid-template-columns: minmax(0, 1fr);
+    text-align: center;
+  }
+
+  .shelfArt {
+    max-width: 130px;
+  }
+
+  .body,
+  .buy {
+    align-items: center;
+    justify-content: center;
+  }
+
+  .inside {
+    text-align: left;
+  }
+
+  .odds li {
+    grid-template-columns: 10px minmax(0, 1fr) auto minmax(0, auto);
+  }
+
+  /* "1 in N" gives way to the coins on a narrow screen */
+  .odds small {
+    display: none;
+  }
+
+  .tile {
+    width: 70px;
+    height: 70px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shaking,
+  .opened {
+    animation: none;
+  }
+
+  .reel {
+    transition-duration: 0ms !important;
+  }
+}

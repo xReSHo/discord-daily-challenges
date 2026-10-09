@@ -12,7 +12,7 @@
   --raised: #241d13;
   --hover: #2a2116;
 
-  /* wordle tiles (dark values; overridden in the light theme) */
+  /* wordle tiles */
   --wordle-empty: #14100b;
   --wordle-absent: #100d09;
   --wordle-absent-border: #201a12;
@@ -54,86 +54,16 @@
     Consolas, monospace;
 
   /* --- metrics --- */
-  --container: 1080px;
+  /* the page column grows a little on large monitors instead of sitting as a
+     narrow strip in the middle */
+  --container: clamp(1080px, 60vw, 1560px);
   --r: 2px;
   --r-lg: 3px;
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-  --pad: clamp(20px, 5vw, 44px);
-}
-
-/* ============================================================
-   Light theme — "aged parchment". Opt-in via the header toggle,
-   which stamps data-theme on <html> (see ThemeToggle + layout).
-   Only tokens and a few non-token surfaces are re-stated here.
-   ============================================================ */
-
-:root[data-theme="light"] {
-  color-scheme: light;
-
-  --bg: #f2ebdc;
-  --bg-2: #ebe2ce;
-  --panel: #faf5ea;
-  --panel-2: #f1e8d6;
-  --raised: #e7dcc2;
-  --hover: #ded1b2;
-
-  --line: #d7c8a6;
-  --line-2: #c4b189;
-  --line-gold: #b0894a;
-
-  --ink: #2a2214;
-  --ink-dim: #4c4029;
-  --ink-mute: #6d6047;
-  --ink-faint: #94856a;
-
-  --gold: #8a6a25;
-  --gold-bright: #7c5d1c;
-  --gold-deep: #b58f43;
-  --gold-glow: rgba(140, 108, 40, 0.18);
-
-  --ok: #5d7838;
-  --ok-bright: #486227;
-  --warn: #9a7420;
-  --bad: #b1492c;
-  --bad-bright: #963c1f;
-
-  --shadow:
-    0 1px 2px rgba(60, 46, 20, 0.12),
-    0 16px 40px -18px rgba(60, 46, 20, 0.26);
-
-  --wordle-empty: #ece3d0;
-  --wordle-absent: #ddd0b3;
-  --wordle-absent-border: #ccba94;
-}
-
-:root[data-theme="light"] body {
-  background:
-    radial-gradient(115% 70% at 50% -8%, #fdfaf2 0%, transparent 52%),
-    radial-gradient(90% 55% at 50% 112%, #efe5d1 0%, transparent 48%),
-    var(--bg);
-}
-
-:root[data-theme="light"] ::selection {
-  background: rgba(140, 108, 40, 0.24);
-  color: #2a2214;
-}
-
-:root[data-theme="light"] .atmosphere__vignette {
-  background: radial-gradient(
-    130% 100% at 50% 38%,
-    transparent 55%,
-    rgba(92, 71, 33, 0.05) 82%,
-    rgba(92, 71, 33, 0.1) 100%
-  );
-}
-
-:root[data-theme="light"] .atmosphere__grain {
-  opacity: 0.035;
-  mix-blend-mode: multiply;
-}
-
-:root[data-theme="light"] .atmosphere__embers {
-  opacity: 0.4;
+  /* side gutter; never less than a phone's notch / rounded-corner inset */
+  --pad: max(clamp(16px, 5vw, 44px), env(safe-area-inset-left), env(safe-area-inset-right));
+  /* space above and below a page's content (PageHero undoes the top one) */
+  --main-pad: clamp(28px, 6vw, 56px);
 }
 
 * {
@@ -145,7 +75,13 @@
 html {
   color-scheme: dark;
   -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
   scrollbar-color: var(--line-2) transparent;
+  -webkit-tap-highlight-color: transparent;
+}
+
+img {
+  max-width: 100%;
 }
 
 body {
@@ -165,6 +101,13 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+}
+
+/* large monitors: slightly larger text to go with the wider page column */
+@media (min-width: 2200px) {
+  body {
+    font-size: 16.5px;
+  }
 }
 
 a {
@@ -312,7 +255,7 @@ h4 {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding-block: clamp(28px, 6vw, 56px);
+  padding-block: var(--main-pad);
 }
 
 .game-page {
@@ -375,6 +318,35 @@ h4 {
     var(--line-2) 80%,
     transparent
   );
+}
+
+/* ornamental rule: a gold hairline with a small diamond at its centre */
+.divider {
+  position: relative;
+  display: block;
+  height: 9px;
+  background: linear-gradient(
+      90deg,
+      transparent,
+      var(--line-gold) 18%,
+      var(--gold-deep) 50%,
+      var(--line-gold) 82%,
+      transparent
+    )
+    center / 100% 1px no-repeat;
+}
+
+.divider::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  transform: translate(-50%, -50%) rotate(45deg);
+  background: var(--bg);
+  border: 1px solid var(--gold);
+  box-shadow: 0 0 10px var(--gold-glow);
 }
 
 /* ============================================================
@@ -462,10 +434,15 @@ h4 {
 .panel {
   position: relative;
   background:
+    radial-gradient(120% 90% at 50% 0%, rgba(236, 202, 119, 0.035), transparent 60%),
     linear-gradient(180deg, var(--panel), var(--panel-2)),
     var(--bg);
   border: 1px solid var(--line);
   border-radius: var(--r);
+  box-shadow:
+    inset 0 1px 0 rgba(236, 202, 119, 0.045),
+    0 1px 2px rgba(0, 0, 0, 0.35),
+    0 18px 36px -24px rgba(0, 0, 0, 0.8);
 }
 
 .panel--pad {
@@ -494,6 +471,28 @@ h4 {
 
 a.panel--lit:hover::before,
 .panel--lit:hover::before {
+  opacity: 1;
+}
+
+/* gilded corners — an inner frame drawn only at its four corners */
+.ornate::after {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  z-index: 2;
+  pointer-events: none;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' fill='none' stroke='%23b08d42'%3E%3Cg transform='rotate(0 11 11)'%3E%3Cpath d='M.5 22V.5H22'/%3E%3Cpath d='M4.5 15V4.5H15' opacity='.55'/%3E%3Cpath d='M4.5 1.6 7.4 4.5 4.5 7.4 1.6 4.5Z' fill='%23b08d42' stroke='none'/%3E%3C/g%3E%3C/svg%3E") top left no-repeat,
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' fill='none' stroke='%23b08d42'%3E%3Cg transform='rotate(90 11 11)'%3E%3Cpath d='M.5 22V.5H22'/%3E%3Cpath d='M4.5 15V4.5H15' opacity='.55'/%3E%3Cpath d='M4.5 1.6 7.4 4.5 4.5 7.4 1.6 4.5Z' fill='%23b08d42' stroke='none'/%3E%3C/g%3E%3C/svg%3E") top right no-repeat,
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' fill='none' stroke='%23b08d42'%3E%3Cg transform='rotate(180 11 11)'%3E%3Cpath d='M.5 22V.5H22'/%3E%3Cpath d='M4.5 15V4.5H15' opacity='.55'/%3E%3Cpath d='M4.5 1.6 7.4 4.5 4.5 7.4 1.6 4.5Z' fill='%23b08d42' stroke='none'/%3E%3C/g%3E%3C/svg%3E") bottom right no-repeat,
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' fill='none' stroke='%23b08d42'%3E%3Cg transform='rotate(270 11 11)'%3E%3Cpath d='M.5 22V.5H22'/%3E%3Cpath d='M4.5 15V4.5H15' opacity='.55'/%3E%3Cpath d='M4.5 1.6 7.4 4.5 4.5 7.4 1.6 4.5Z' fill='%23b08d42' stroke='none'/%3E%3C/g%3E%3C/svg%3E") bottom left no-repeat;
+  opacity: 0.55;
+  transition: opacity 0.35s var(--ease);
+}
+
+a.ornate:hover::after,
+a.ornate:focus-visible::after,
+.ornate--live:hover::after {
   opacity: 1;
 }
 
@@ -600,63 +599,6 @@ a.panel--lit:hover::before,
 }
 
 /* ============================================================
-   Theme toggle — a small sun / crescent-moon disc
-   ============================================================ */
-
-.theme-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  flex-shrink: 0;
-  border-radius: 50%;
-  color: var(--ink-mute);
-  background: transparent;
-  border: 1px solid var(--line-2);
-  cursor: pointer;
-  transition:
-    color 0.2s var(--ease),
-    border-color 0.2s var(--ease),
-    background 0.2s var(--ease);
-}
-
-.theme-toggle:hover,
-.theme-toggle:focus-visible {
-  color: var(--gold-bright);
-  border-color: var(--gold);
-  background: color-mix(in srgb, var(--gold) 9%, transparent);
-}
-
-.theme-toggle svg {
-  width: 15px;
-  height: 15px;
-}
-
-/* Show the icon that matches the *current* theme; CSS-driven so it's
-   correct before hydration and never flashes. */
-.theme-toggle .tt-sun {
-  display: none;
-}
-.theme-toggle .tt-moon {
-  display: inline-block;
-}
-:root[data-theme="light"] .theme-toggle .tt-sun {
-  display: inline-block;
-}
-:root[data-theme="light"] .theme-toggle .tt-moon {
-  display: none;
-}
-
-/* landing page places it in the top-right corner */
-.theme-toggle--corner {
-  position: fixed;
-  top: clamp(14px, 3.5vw, 26px);
-  right: clamp(14px, 3.5vw, 26px);
-  z-index: 30;
-}
-
-/* ============================================================
    Motion
    ============================================================ */
 
@@ -724,94 +666,96 @@ a.panel--lit:hover::before,
 }
 
 /* ============================================================
-   Loading grace — a site of grace that fills with light.
-   Technique: the grace shape is a CSS mask on a plain <div>; the
-   dim base is the div's own background, and a bright gradient
-   pseudo-element rises through the mask. Only `transform` and
-   `opacity` animate, so it stays on the compositor — no layout,
-   no per-frame paint.
+   Page transitions (see lib/page-transition)
+
+   The page being left is held on screen until the next is ready, then the
+   two are blended: the old one fades back, the new one rises into place.
+   The site header is its own layer and does not move.
+   html[data-vt="up"]: arriving by scrolling on past the bottom of a page —
+   the old page is carried up and away and the next comes up from below.
+   html[data-vt="down"]: the same from the top, the other way.
+   Transform and opacity only: these run on the compositor, so they stay
+   smooth even while the new page is still settling in.
    ============================================================ */
 
-.grace-loader {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 22px;
-  min-height: 46vh;
+::view-transition-old(root) {
+  animation: vtOut 200ms cubic-bezier(0.4, 0, 1, 1) both;
 }
 
-.grace-loader__grace {
-  --grace-shape: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20120%20170'%3E%3Cg%20fill='none'%20stroke='%23fff'%20stroke-width='2.4'%20stroke-linecap='round'%3E%3Cpath%20d='M60%20158C57%20132%2063%20110%2060%2088'%20stroke-width='3'/%3E%3Cpath%20d='M60%2092C60%2068%2060%2048%2060%2026'/%3E%3Cpath%20d='M60%2098C49%2086%2041%2066%2035%2042'/%3E%3Cpath%20d='M60%2098C71%2086%2079%2066%2085%2042'/%3E%3Cpath%20d='M60%20108C53%20102%2047%2094%2043%2082'%20stroke-width='1.7'/%3E%3Cpath%20d='M60%20108C67%20102%2073%2094%2077%2082'%20stroke-width='1.7'/%3E%3C/g%3E%3Cg%20fill='%23fff'%3E%3Ccircle%20cx='60'%20cy='24'%20r='3.7'/%3E%3Ccircle%20cx='34'%20cy='40'%20r='3'/%3E%3Ccircle%20cx='86'%20cy='40'%20r='3'/%3E%3Ccircle%20cx='42'%20cy='80'%20r='2.2'/%3E%3Ccircle%20cx='78'%20cy='80'%20r='2.2'/%3E%3Cellipse%20cx='60'%20cy='159'%20rx='15'%20ry='3'/%3E%3C/g%3E%3C/svg%3E");
-  position: relative;
-  width: clamp(88px, 22vw, 128px);
-  aspect-ratio: 120 / 170;
-  color: var(--gold-deep); /* the dim, always-visible base */
-  background: currentColor;
-  -webkit-mask: var(--grace-shape) center / contain no-repeat;
-  mask: var(--grace-shape) center / contain no-repeat;
-  overflow: hidden;
-  filter: drop-shadow(0 0 7px var(--gold-glow)); /* static aura, painted once */
+::view-transition-new(root) {
+  animation: vtIn 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
-/* light rising to fill the grace — GPU transform only */
-.grace-loader__grace::after {
-  content: "";
-  position: absolute;
-  left: -25%;
-  right: -25%;
-  bottom: 0;
-  height: 200%;
-  background: linear-gradient(
-    to top,
-    var(--gold-bright) 6%,
-    color-mix(in srgb, var(--gold-bright) 55%, transparent) 40%,
-    transparent 70%
-  );
-  transform: translate3d(0, 100%, 0);
-  animation: graceRise 2900ms cubic-bezier(0.33, 0, 0.2, 1) infinite;
-}
-
-/* a soft bloom that breathes with the fill — opacity only */
-.grace-loader__grace::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: var(--gold-bright);
-  opacity: 0;
-  animation: graceBloom 2900ms cubic-bezier(0.33, 0, 0.2, 1) infinite;
-}
-
-.grace-loader__label {
-  font-size: 11px;
-  letter-spacing: 0.26em;
-  text-transform: uppercase;
-  color: var(--ink-mute);
-  animation: flicker 1.9s ease-in-out infinite;
-}
-
-@keyframes graceRise {
-  0% {
-    transform: translate3d(0, 100%, 0);
-  }
-  46%,
-  66% {
-    transform: translate3d(0, -6%, 0);
-  }
-  100% {
-    transform: translate3d(0, 100%, 0);
-  }
-}
-
-@keyframes graceBloom {
-  0%,
-  100% {
+@keyframes vtOut {
+  to {
     opacity: 0;
   }
-  46%,
-  66% {
-    opacity: 0.24;
+}
+
+@keyframes vtIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0);
   }
+}
+
+html[data-vt="up"]::view-transition-old(root),
+html[data-vt="down"]::view-transition-old(root) {
+  animation: vtSlideOut 380ms cubic-bezier(0.45, 0, 0.8, 0.5) both;
+}
+
+html[data-vt="up"]::view-transition-new(root),
+html[data-vt="down"]::view-transition-new(root) {
+  animation: vtSlideIn 560ms cubic-bezier(0.16, 0.84, 0.24, 1) both;
+}
+
+html[data-vt="up"] {
+  --vt-out: -12vh;
+  --vt-in: 22vh;
+}
+
+html[data-vt="down"] {
+  --vt-out: 12vh;
+  --vt-in: -22vh;
+}
+
+@keyframes vtSlideOut {
+  to {
+    opacity: 0;
+    transform: translate3d(0, var(--vt-out), 0);
+  }
+}
+
+@keyframes vtSlideIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, var(--vt-in), 0);
+  }
+  40% {
+    opacity: 1;
+  }
+}
+
+/* after a burn the screen is a title card for the next page: hold it a beat,
+   then let the page itself come up through it */
+html[data-vt="burn"]::view-transition-old(root) {
+  animation: vtOut 520ms cubic-bezier(0.5, 0, 0.8, 0.6) 140ms both;
+}
+
+html[data-vt="burn"]::view-transition-new(root) {
+  animation: vtCardIn 620ms cubic-bezier(0.2, 0.8, 0.2, 1) 140ms both;
+}
+
+@keyframes vtCardIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0);
+  }
+}
+
+/* the header neither fades nor moves between two pages that both have it */
+::view-transition-group(site-header) {
+  animation-duration: 0.01s;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -828,12 +772,5 @@ a.panel--lit:hover::before,
   }
   .ember {
     display: none;
-  }
-  /* hold the grace fully lit rather than mid-fill */
-  .grace-loader__grace::after {
-    transform: translate3d(0, -6%, 0);
-  }
-  .grace-loader__grace::before {
-    opacity: 0.24;
   }
 }

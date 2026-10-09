@@ -1,244 +1,719 @@
-.card {
-  position: relative;
-  width: min(96vw, 760px);
-  margin-inline: auto;
+/* ============================================================
+   Aim trial: a readout along the top, and the range under it.
+   Everything that moves here is a transform or an opacity, so the
+   play never waits on layout.
+   ============================================================ */
+
+.wrap {
+  /* as wide as the page allows, but never so tall the range runs off the
+     bottom of the window (it keeps a 16:10 shape) */
+  width: min(100%, calc((100dvh - 326px) * 1.6));
+  min-width: min(100%, 300px);
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  align-items: center;
-  padding: clamp(18px, 3vw, 28px);
-  background: linear-gradient(180deg, var(--panel), var(--panel-2)), var(--bg);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
+  gap: 10px;
   animation: rise 0.6s var(--ease) both;
 }
 
-.card::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: -1px;
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    var(--gold-deep) 12%,
-    var(--gold-bright) 50%,
-    var(--gold-deep) 88%,
-    transparent
-  );
-  opacity: 0.5;
-}
-
-.lead {
-  text-align: center;
-  max-width: 44ch;
-  font-family: var(--f-serif);
-  font-size: 1.05rem;
-  line-height: 1.6;
-  color: var(--ink-dim);
-}
-
-.stats {
-  display: flex;
-  gap: 28px;
-  font-family: var(--f-mono);
-  font-variant-numeric: tabular-nums;
-  font-size: 16px;
-  font-weight: 500;
-  letter-spacing: 0.1em;
-  color: var(--gold-bright);
-}
-
-.timerLow {
-  color: var(--bad-bright);
-  animation: pulseText 0.6s ease-in-out infinite;
-}
-
-.missActive {
-  color: var(--bad-bright);
-}
-
-@keyframes pulseText {
-  50% {
-    opacity: 0.45;
-  }
-}
-
-/* ---------- play area ---------- */
-.area {
+/* ---------- the readout ---------- */
+.hud {
   position: relative;
-  width: 100%;
-  aspect-ratio: 3 / 2;
-  border-radius: var(--r);
-  border: 1px solid var(--line-gold);
-  box-shadow: inset 0 0 60px -20px rgba(0, 0, 0, 0.8);
-  background:
-    radial-gradient(60% 60% at 50% 40%, rgba(200, 162, 76, 0.06), transparent 70%),
-    repeating-linear-gradient(
-      0deg,
-      transparent 0 39px,
-      rgba(255, 255, 255, 0.02) 39px 40px
-    ),
-    repeating-linear-gradient(
-      90deg,
-      transparent 0 39px,
-      rgba(255, 255, 255, 0.02) 39px 40px
-    ),
-    var(--bg-2);
-  overflow: hidden;
-  cursor: crosshair;
-  user-select: none;
-  touch-action: manipulation;
-}
-
-.target {
-  position: absolute;
-  transform: translate(-50%, -50%);
-  aspect-ratio: 1;
-  border-radius: 50%;
-  clip-path: circle(50%);
-  border: none;
-  padding: 0;
-  cursor: crosshair;
-  background:
-    radial-gradient(circle at 38% 35%, #fbe7ad, var(--gold) 55%, var(--gold-deep) 100%);
-  box-shadow:
-    0 0 0 1px var(--gold-bright),
-    0 0 26px 2px var(--gold-glow),
-    0 0 60px 6px rgba(236, 202, 119, 0.12);
-  /* Pops in, then shrinks and fades over its lifetime (--ttl). If it fully
-     runs out before you click, the run counts a miss. */
-  animation: targetLife var(--ttl, 1600ms) linear forwards;
-}
-
-@keyframes targetLife {
-  0% {
-    transform: translate(-50%, -50%) scale(0.5);
-    opacity: 0.45;
-  }
-  8% {
-    transform: translate(-50%, -50%) scale(1);
-    opacity: 1;
-  }
-  70% {
-    box-shadow:
-      0 0 0 1px var(--gold-bright),
-      0 0 26px 2px var(--gold-glow),
-      0 0 60px 6px rgba(236, 202, 119, 0.12);
-  }
-  100% {
-    transform: translate(-50%, -50%) scale(0.55);
-    opacity: 0.85;
-    box-shadow:
-      0 0 0 1px var(--bad-bright),
-      0 0 20px 2px rgba(214, 90, 74, 0.5);
-  }
-}
-
-.countdown {
-  position: absolute;
-  inset: 0;
   display: grid;
-  place-items: center;
-  font-family: var(--f-display);
-  font-size: clamp(64px, 16vw, 128px);
-  font-weight: 500;
-  color: var(--gold-bright);
-  text-shadow: 0 0 40px var(--gold-glow);
-  animation: countIn 1s var(--ease) infinite;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: end;
+  gap: 12px;
+  padding: 10px 4px 12px;
 }
 
-@keyframes countIn {
-  0% {
-    opacity: 0;
-    transform: scale(1.25);
-  }
-  30% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  100% {
-    opacity: 0.85;
-    transform: scale(1);
-  }
-}
-
-.overlay {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  font-size: 12px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--ink-dim);
-  background: color-mix(in srgb, var(--bg) 70%, transparent);
-  backdrop-filter: blur(2px);
-}
-
-.hint {
-  font-size: 12px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-  min-height: 16px;
-}
-
-.error {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--bad-bright);
-  text-align: center;
-}
-
-/* ---------- result ---------- */
-.resultBlock {
+.hudCell {
   display: flex;
   flex-direction: column;
+  gap: 5px;
+}
+
+.hudMid {
   align-items: center;
-  gap: 10px;
-  text-align: center;
 }
 
-.passed {
-  font-family: var(--f-serif);
-  font-size: 1.5rem;
-  color: var(--gold-bright);
+.hudEnd {
+  align-items: flex-end;
 }
 
-.rejected {
-  font-family: var(--f-serif);
-  font-size: 1.3rem;
-  color: var(--bad-bright);
-}
-
-.muted {
-  font-family: var(--f-mono);
-  font-size: 12px;
+.hudLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
   color: var(--ink-mute);
 }
 
-.reward {
-  color: var(--ok-bright);
-  font-weight: 600;
-  font-size: 13px;
+.hudLabel svg {
+  color: var(--gold-deep);
 }
 
-.rewardFailed {
+.hudValue {
+  font-family: var(--f-display);
+  font-size: clamp(1.25rem, 1rem + 1vw, 1.7rem);
+  line-height: 1;
+  color: var(--gold-bright);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.hudValue small {
+  font-size: 0.55em;
+  color: var(--ink-mute);
+}
+
+/* a diamond per miss allowed; each one goes out as it is spent */
+.pips {
+  display: inline-flex;
+  gap: 8px;
+  height: clamp(1.25rem, 1rem + 1vw, 1.7rem);
+  align-items: center;
+}
+
+.pip {
+  width: 11px;
+  height: 11px;
+  rotate: 45deg;
+  background: var(--gold-bright);
+  border: 1px solid var(--gold-bright);
+  box-shadow: 0 0 10px var(--gold-glow);
+  transition:
+    background 0.25s var(--ease),
+    border-color 0.25s var(--ease),
+    box-shadow 0.25s var(--ease);
+}
+
+.pipSpent {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--bad) 70%, transparent);
+  box-shadow: none;
+}
+
+/* how far through the run of marks, along the foot of the readout */
+.progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.progress span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--gold-deep), var(--gold-bright));
+  transform-origin: left;
+  transition: transform 0.25s var(--ease);
+}
+
+/* ---------- the range ---------- */
+
+/* Open ground rather than a framed box: a pool of light that fades into the
+   page, with only a bracket at each corner to say where the range ends (a shot
+   outside a mark still counts, so the edge has to be findable). */
+.area {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  /* lets a mark's drift be given in shares of the range (cqw / cqh) */
+  container-type: size;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* the ground: a warm glow and a faint grid, both dying away towards the edge */
+.area::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(58% 62% at 50% 48%, rgba(236, 202, 119, 0.085), transparent 72%),
+    repeating-linear-gradient(0deg, transparent 0 47px, rgba(236, 202, 119, 0.045) 47px 48px),
+    repeating-linear-gradient(90deg, transparent 0 47px, rgba(236, 202, 119, 0.045) 47px 48px);
+  -webkit-mask-image: radial-gradient(70% 72% at 50% 50%, #000 30%, transparent 100%);
+  mask-image: radial-gradient(70% 72% at 50% 50%, #000 30%, transparent 100%);
+}
+
+/* the four corner brackets */
+.area::after {
+  --c: var(--line-gold);
+  --l: clamp(16px, 3cqw, 30px);
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--c), var(--c)) top left / var(--l) 1px,
+    linear-gradient(var(--c), var(--c)) top left / 1px var(--l),
+    linear-gradient(var(--c), var(--c)) top right / var(--l) 1px,
+    linear-gradient(var(--c), var(--c)) top right / 1px var(--l),
+    linear-gradient(var(--c), var(--c)) bottom left / var(--l) 1px,
+    linear-gradient(var(--c), var(--c)) bottom left / 1px var(--l),
+    linear-gradient(var(--c), var(--c)) bottom right / var(--l) 1px,
+    linear-gradient(var(--c), var(--c)) bottom right / 1px var(--l);
+  background-repeat: no-repeat;
+  opacity: 0.8;
+  transition: opacity 0.3s var(--ease);
+}
+
+.areaLive::after {
+  --c: var(--gold);
+  opacity: 1;
+}
+
+/* in play: a shot is a shot — no scrolling, no zooming, no text cursor */
+.areaLive {
+  touch-action: none;
+  cursor: crosshair;
+}
+
+/* a red edge that flares once at each miss */
+.flash {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  background: radial-gradient(75% 80% at 50% 50%, transparent 55%, rgba(189, 90, 60, 0.28));
+  opacity: 0;
+  animation: flash 0.4s ease-out;
+}
+
+@keyframes flash {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* ---------- a mark ---------- */
+
+/* The button is the mark's place on the range and what is struck. Its drift
+   (if it has one) runs on the compositor for the whole of its life; `--lag`
+   starts it part-way through if it was drawn late. */
+.mark {
+  position: absolute;
+  z-index: 2;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: 50%;
+  translate: -50% -50%;
+  cursor: crosshair;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  animation: drift var(--ttl) linear var(--lag) both;
+  will-change: transform;
+}
+
+/* a little more to hit than to see, for a finger or a small mark */
+.mark::after {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  border-radius: 50%;
+}
+
+@keyframes drift {
+  to {
+    transform: translate(var(--dx), var(--dy));
+  }
+}
+
+/* a hanging bronze shield: rings beaten into it, a boss at the centre */
+.disc,
+.ghost,
+.sizes i {
+  display: block;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 34% 28%, rgba(255, 244, 210, 0.5), transparent 34%),
+    radial-gradient(
+      circle,
+      #f6e2a6 0 9%,
+      #6b4d1c 10% 14%,
+      #c9a352 15% 31%,
+      #5a4016 32% 36%,
+      #a9843a 37% 60%,
+      #4a3412 61% 66%,
+      #8a6a2c 67% 88%,
+      #e9c877 89% 100%
+    );
+  box-shadow:
+    0 0 0 1px #2a1d0a,
+    0 4px 14px rgba(0, 0, 0, 0.7),
+    0 0 22px -4px var(--gold-glow);
+}
+
+.disc {
+  position: absolute;
+  inset: 0;
+  animation: markIn 0.16s var(--ease) both;
+}
+
+@keyframes markIn {
+  from {
+    transform: scale(0.35);
+    opacity: 0;
+  }
+}
+
+/* the fuse: a ring around the mark that burns away as its time runs out */
+.fuse {
+  position: absolute;
+  inset: -16%;
+  width: 132%;
+  height: 132%;
+  rotate: -90deg;
+  pointer-events: none;
+}
+
+.fuse circle {
+  fill: none;
+  stroke: var(--gold-bright);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 0;
+  opacity: 0.85;
+  animation: fuse var(--ttl) linear var(--lag) both;
+}
+
+@keyframes fuse {
+  70% {
+    stroke: var(--gold-bright);
+  }
+  to {
+    stroke-dashoffset: 100;
+    stroke: var(--bad-bright);
+  }
+}
+
+/* ---------- things that play once ---------- */
+.fx {
+  position: absolute;
+  z-index: 3;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  pointer-events: none;
+}
+
+/* struck: an arrow flies in from the upper right; as it lands the shield
+   breaks into a ring of light and a few shards */
+.ghost {
+  position: absolute;
+  inset: 0;
+  animation: shatter 0.3s ease-in 0.09s both;
+}
+
+@keyframes shatter {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  35% {
+    transform: scale(1.12);
+    opacity: 1;
+    filter: brightness(1.9);
+  }
+  100% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+}
+
+.ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid var(--gold-bright);
+  box-shadow: 0 0 18px var(--gold-glow);
+  opacity: 0;
+  animation: ring 0.42s ease-out 0.1s both;
+}
+
+@keyframes ring {
+  0% {
+    transform: scale(0.5);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
+.shard {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 16%;
+  height: 9%;
+  margin: -4.5% 0 0 -8%;
+  background: linear-gradient(90deg, #e9c877, #7a5a22);
+  clip-path: polygon(0 50%, 60% 0, 100% 40%, 70% 100%);
+  opacity: 0;
+  animation: shard 0.46s cubic-bezier(0.2, 0.7, 0.3, 1) 0.1s both;
+}
+
+@keyframes shard {
+  0% {
+    transform: rotate(var(--a)) translateX(60%) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(var(--a)) translateX(520%) scale(0.4);
+    opacity: 0;
+  }
+}
+
+/* the arrow: its head at the centre of the mark, its shaft trailing away up
+   and to the right */
+.arrow {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 240%;
+  min-width: 90px;
+  height: 3px;
+  margin-top: -1.5px;
+  transform-origin: 0 50%;
+  background: linear-gradient(90deg, #fff6d8, var(--gold-bright) 12%, rgba(200, 162, 76, 0.5) 55%, transparent);
+  border-radius: 2px;
+  filter: drop-shadow(0 0 5px var(--gold-glow));
+  animation: arrow 0.5s linear both;
+}
+
+/* the head */
+.arrow::before {
+  content: "";
+  position: absolute;
+  left: -2px;
+  top: 50%;
+  width: 12px;
+  height: 10px;
+  margin-top: -5px;
+  background: #fff6d8;
+  clip-path: polygon(0 50%, 100% 0, 72% 50%, 100% 100%);
+}
+
+/* the fletching */
+.arrow::after {
+  content: "";
+  position: absolute;
+  left: 38%;
+  top: 50%;
+  width: 16px;
+  height: 9px;
+  margin-top: -4.5px;
+  background: rgba(236, 202, 119, 0.7);
+  clip-path: polygon(0 50%, 30% 0, 100% 0, 75% 50%, 100% 100%, 30% 100%);
+}
+
+@keyframes arrow {
+  0% {
+    transform: rotate(-24deg) translateX(110%);
+    opacity: 0;
+  }
+  6% {
+    opacity: 1;
+  }
+  20% {
+    transform: rotate(-24deg) translateX(0);
+    opacity: 1;
+  }
+  /* a shudder as it bites */
+  26% {
+    transform: rotate(-22deg) translateX(-1.5%);
+  }
+  34% {
+    transform: rotate(-24deg) translateX(0);
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(-24deg) translateX(0);
+    opacity: 0;
+  }
+}
+
+/* let go: where the mark was, a red ring closes and is gone */
+.lost {
+  border-radius: 50%;
+  border: 2px solid var(--bad-bright);
+  animation: lost 0.5s ease-out both;
+}
+
+@keyframes lost {
+  0% {
+    transform: scale(1.15);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+}
+
+/* a shot that hit nothing: a small red cross where it landed */
+.stray {
+  min-width: 18px;
+  animation: stray 0.5s ease-out both;
+}
+
+.stray::before,
+.stray::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--bad-bright);
+  rotate: 45deg;
+}
+
+.stray::after {
+  rotate: -45deg;
+}
+
+@keyframes stray {
+  0% {
+    transform: scale(0.5);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.2);
+    opacity: 0;
+  }
+}
+
+/* ---------- what stands over the range between rounds ---------- */
+.countdown,
+.veil {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+}
+
+.countdown {
+  font-family: var(--f-display);
+  font-size: clamp(4rem, 18cqw, 9rem);
+  line-height: 1;
+  color: var(--gold-bright);
+  text-shadow: 0 0 40px var(--gold-glow);
+  animation: count 0.8s var(--ease) both;
+}
+
+@keyframes count {
+  0% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+  30% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.9);
+    opacity: 0.2;
+  }
+}
+
+.veil {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.card {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(8px, 2.2cqh, 16px);
+  padding: 4cqh 5cqw;
+  text-align: center;
+  overflow-y: auto;
+  animation: rise 0.45s var(--ease) both;
+}
+
+.cardTitle {
+  font-family: var(--f-display);
+  font-size: clamp(1.15rem, 4.4cqw, 2rem);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+}
+
+/* the figures, side by side */
+.facts {
+  list-style: none;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  width: min(100%, 560px);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r);
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+}
+
+.facts li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: clamp(7px, 2.2cqh, 14px) 4px;
+  font-size: clamp(8px, 1.5cqw, 10px);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+.facts li + li {
+  border-left: 1px solid var(--line);
+}
+
+.facts b {
+  font-family: var(--f-display);
+  font-size: clamp(1.05rem, 3.6cqw, 1.7rem);
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--gold-bright);
+  font-variant-numeric: tabular-nums lining-nums;
+  white-space: nowrap;
+}
+
+.facts b small {
+  font-size: 0.55em;
+  color: var(--ink-mute);
+}
+
+.factGold b {
+  color: #fbeec6;
+}
+
+.legend {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 12px;
+  font-size: clamp(10px, 1.7cqw, 12px);
+  letter-spacing: 0.04em;
+  color: var(--ink-dim);
+}
+
+/* the three sizes of mark, drawn small */
+.sizes {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.sizes i {
+  width: 20px;
+  height: 20px;
+  box-shadow: 0 0 0 1px #2a1d0a;
+}
+
+.sizes i:nth-child(2) {
+  width: 15px;
+  height: 15px;
+}
+
+.sizes i:nth-child(3) {
+  width: 11px;
+  height: 11px;
+}
+
+.verdictWon,
+.verdictLost {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--f-display);
+  font-size: clamp(12px, 2.2cqw, 15px);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.verdictWon {
+  color: var(--ok-bright);
+}
+
+.verdictLost {
   color: var(--bad-bright);
-  font-size: 12px;
-  max-width: 40ch;
+}
+
+.big {
+  font-family: var(--f-display);
+  font-size: clamp(2.2rem, 9cqw, 4.4rem);
+  line-height: 1;
+  background: linear-gradient(180deg, #fbeec6 10%, var(--gold-bright) 50%, var(--gold-deep));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.big small {
+  font-size: 0.35em;
+}
+
+.bigLabel {
+  margin-top: -6px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+.note {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 46ch;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-mute);
+}
+
+.error {
+  max-width: 46ch;
+  font-size: 12.5px;
+  color: var(--bad-bright);
 }
 
 .button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.6em;
-  padding: 0.9em 1.9em;
-  font-size: 11px;
+  gap: 9px;
+  min-height: 44px;
+  padding: 0.85em 2.2em;
+  font-size: 11.5px;
   font-weight: 700;
   letter-spacing: 0.2em;
   text-transform: uppercase;
@@ -247,14 +722,109 @@
   border: 1px solid var(--gold);
   border-radius: var(--r);
   cursor: pointer;
-  transition: box-shadow 0.25s var(--ease);
+  transition:
+    box-shadow 0.2s var(--ease),
+    transform 0.1s;
 }
 
-.button:hover:not(:disabled) {
-  box-shadow: 0 0 28px -6px var(--gold-glow);
+.button:hover {
+  box-shadow: 0 0 30px -6px var(--gold-glow);
 }
 
-.button:disabled {
-  opacity: 0.5;
-  cursor: default;
+.button:active {
+  transform: translateY(1px);
+}
+
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  transition: color 0.2s var(--ease);
+}
+
+.backLink:hover {
+  color: var(--gold-bright);
+}
+
+/* ---------- phones ---------- */
+@media (max-width: 640px) {
+  .hud {
+    padding-top: 2px;
+  }
+  .hudLabel {
+    font-size: 8.5px;
+    letter-spacing: 0.14em;
+  }
+  .pip {
+    width: 9px;
+    height: 9px;
+  }
+  .pips {
+    gap: 6px;
+  }
+  .cardTitle {
+    font-size: 1.3rem;
+  }
+  .facts b {
+    font-size: 1.2rem;
+  }
+  .facts li {
+    font-size: 8px;
+    padding: 10px 2px;
+  }
+  .legend {
+    font-size: 11px;
+  }
+  .big {
+    font-size: 2.8rem;
+  }
+}
+
+/* ---------- a phone held upright: the range stands tall ---------- */
+@media (max-width: 640px) and (orientation: portrait) {
+  .wrap {
+    width: 100%;
+  }
+  /* between rounds: what is left of the screen under the banner */
+  .area {
+    aspect-ratio: auto;
+    height: max(400px, calc(100dvh - 268px));
+  }
+  .card {
+    gap: 16px;
+    padding: 20px 6px;
+  }
+  /* in play the round takes over the whole screen: the readout along the top
+     and the range filling everything under it */
+  .wrapLive {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    width: auto;
+    gap: 8px;
+    padding: max(12px, env(safe-area-inset-top)) var(--pad) max(14px, env(safe-area-inset-bottom));
+    background:
+      radial-gradient(90% 60% at 50% 40%, rgba(236, 202, 119, 0.05), transparent 70%),
+      var(--bg);
+    animation: none;
+  }
+  .wrapLive .area {
+    flex: 1;
+    height: auto;
+    min-height: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shard,
+  .ring,
+  .countdown {
+    animation: none;
+  }
 }

@@ -1,0 +1,114 @@
+/* ============================================================
+   Loading screen — a site of grace burning in dark ruins, shown
+   like a film frame: the whole scene across the tab, black bars
+   above and below, the caption in the lower bar.
+   ============================================================ */
+
+.screen {
+  position: fixed;
+  inset: 0;
+  z-index: 80; /* over the header; under the achievement toast (90) */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  /* true black, to match the clip's own borders: the bars and the clip are one
+     surface, with no seam between them */
+  background: #000;
+  /* a load that finishes at once never flashes the loader */
+  animation: appear 320ms ease-out 80ms both;
+}
+
+/* The frame: as wide as the tab, never taller than it, always 16:9 — so the
+   whole clip is visible and it is never enlarged past the width of the screen. */
+.stage {
+  position: relative;
+  width: min(100vw, calc(100vh * 16 / 9));
+  aspect-ratio: 16 / 9;
+  max-height: 100vh;
+}
+
+.video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+/* Tall screens (phones held upright): a 16:9 frame would be a thin strip, so
+   give it more height and let the sides of the scene run off the screen, with
+   the grace kept in the middle. The bars above and below remain. */
+@media (max-aspect-ratio: 4 / 5) {
+  .stage {
+    width: 100vw;
+    aspect-ratio: auto;
+    height: min(62vh, 150vw);
+  }
+  .video {
+    object-fit: cover;
+    object-position: 49% 50%;
+  }
+}
+
+/* --- caption, in the lower bar ------------------------------------------ */
+
+.label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: clamp(14px, 4.6vh, 52px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin: 0;
+}
+
+.text {
+  font-family: var(--f-display);
+  font-size: clamp(11.5px, 1.05vw, 14px);
+  letter-spacing: 0.36em;
+  text-indent: 0.36em; /* optical centring: undo the trailing letter-space */
+  text-transform: uppercase;
+  /* fixed light ink: the caption always sits on black, in both themes */
+  color: #cfc5ae;
+  animation: glimmer 3.8s ease-in-out infinite;
+}
+
+.rule {
+  width: clamp(40px, 6vw, 84px);
+  height: 1px;
+  background: linear-gradient(to right, transparent, #8a6c30);
+}
+
+.rule:last-child {
+  background: linear-gradient(to left, transparent, #8a6c30);
+}
+
+@keyframes appear {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes glimmer {
+  0%,
+  100% {
+    opacity: 0.62;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen,
+  .text {
+    animation: none;
+  }
+}

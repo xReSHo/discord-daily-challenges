@@ -1,12 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Users, Swords, Timer } from "lucide-react";
 import type { BossState, HitResponse } from "@/lib/boss/types";
 import { eclipsePhaseAt } from "@/lib/boss/mechanics/eclipse";
+import {
+  BREATH,
+  CORONA,
+  MOMENTUM,
+  betterBreath,
+  breathFrom,
+  coronaMult,
+  momentumMult,
+  momentumStep,
+  momentumTier,
+} from "@/lib/boss/mechanics/combo";
 import { WeakpointArena } from "./WeakpointArena";
 import { MiniArena } from "./mini/MiniArena";
-import { AdminBar, BossPortrait, Leaderboard, Outcome, fmtDuration } from "./shared";
+import { BossPortrait, ComboBand, Outcome, Stage, fmtDuration } from "./shared";
 import styles from "./boss.module.css";
 
 // Kept deliberately low-chatter for a free serverless host: while you're
@@ -17,10 +27,12 @@ const POLL_IDLE_MS = 6000;
 const IDLE_AFTER_MS = 3500; // no clicks for this long -> resume idle polling
 const HURT_MS = 130;
 const TICK_MS = 66; // ~15fps display refresh, decoupled from click rate
+const COMBO_TICK_MS = 120; // how often the combo band is redrawn
+const PACE_WINDOW_MS = 2500; // momentum reads the pace over this long
 
 // escalation
-const STREAK_GAP_MS = 4000; // over-cap events further apart than this reset the streak
-const CAPTCHA_STREAK_HITS = 24; // this many over-cap clicks in one streak -> captcha
+const STREAK_GAP_MS = 2500; // over-cap events further apart than this reset the streak
+const CAPTCHA_STREAK_HITS = 45; // this many over-cap clicks in one streak -> captcha
 const CAPTCHA_BURST_WINDOW_MS = 1200;
 
 type Captcha = { a: number; b: number };
@@ -70,6 +82,26 @@ function ClickerArena({ initial }: { initial: BossState }) {
   const captchaRef = useRef(false);
   const multRef = useRef(1); // current eclipse damage multiplier, for the ticker
 
+  // --- the combo, kept here between answers from the server. The server
+  // decides the damage; this is only so the band moves the moment you act. ---
+  const comboKind = server.combo?.kind;
+  const paceRef = useRef<number[]>([]); // accepted clicks, rolling PACE_WINDOW_MS
+  const furyRef = useRef(initial.combo?.kind === "momentum" ? initial.combo.value : 0);
+  const breathRef = useRef(
+    initial.combo?.kind === "breath"
+      ? { blows: initial.combo.blows, mult: initial.combo.mult }
+      : { blows: 0, mult: 1 },
+  );
+  const restRef = useRef(0); // longest pause before a strike, this batch
+  const comboMultRef = useRef(1);
+  const [band, setBand] = useState(() => ({
+    fury: initial.combo?.kind === "momentum" ? initial.combo.value : 0,
+    rest: 0,
+    blows: initial.combo?.kind === "breath" ? initial.combo.blows : 0,
+    mult: initial.combo?.kind === "breath" ? initial.combo.mult : 1,
+    inflight: 0, // strikes not yet answered, for the corona count
+  }));
+
   const active = server.status === "active" && !server.slain;
 
   // eclipse phase — derived locally from spawnsAt + the cycle config, so the
@@ -90,6 +122,7 @@ function ClickerArena({ initial }: { initial: BossState }) {
     activeRef.current = active;
     captchaRef.current = captcha !== null;
     multRef.current = phase?.mult ?? 1;
+    if (server.combo?.kind === "corona") comboMultRef.current = coronaMult(server.combo.stacks);
   });
 
   // --- idle poll (skipped entirely while you're actively fighting) ---
@@ -147,11 +180,21 @@ function ClickerArena({ initial }: { initial: BossState }) {
         const res = await fetch("/api/boss/hit", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ clicks: n }),
+          body: JSON.stringify({ clicks: n, rest: Math.round(restRef.current) }),
         });
+        restRef.current = 0;
         const data = (await res.json()) as HitResponse;
         // only one flush is ever in flight, so its state is authoritative
-        if (data.state) setServer(data.state);
+        if (data.state) {
+          setServer(data.state);
+          const c = data.state.combo;
+          if (c?.kind === "momentum") furyRef.current = c.value;
+          // heavy blows are spent as you strike; only take the server's count
+          // when nothing has been struck since
+          if (c?.kind === "breath" && pendingRef.current === 0) {
+            breathRef.current = { blows: c.blows, mult: c.mult };
+          }
+        }
       } catch {
         /* dropped batch — poll will re-sync */
       } finally {
@@ -167,7 +210,7 @@ function ClickerArena({ initial }: { initial: BossState }) {
   useEffect(() => {
     const id = setInterval(() => {
       const inflight = pendingRef.current + unackedRef.current;
-      const dmg = inflight * server.dmgPerClick * multRef.current;
+      const dmg = inflight * server.dmgPerClick * multRef.current * comboMultRef.current;
       const hpR = Math.ceil(Math.max(0, server.hp - dmg));
       const mineR = Math.round((server.yourDamage + dmg) * 10) / 10;
       setDisplay((d) =>
@@ -176,6 +219,45 @@ function ClickerArena({ initial }: { initial: BossState }) {
     }, TICK_MS);
     return () => clearInterval(id);
   }, [server.hp, server.yourDamage, server.dmgPerClick]);
+
+  // --- the combo band: momentum settles toward your pace, breath fills while
+  // you hold still. Drawn a few times a second, never per click. ---
+  useEffect(() => {
+    if (comboKind !== "momentum" && comboKind !== "breath" && comboKind !== "corona") return;
+    const id = setInterval(() => {
+      const t = performance.now();
+      if (comboKind === "momentum") {
+        const pace = paceRef.current;
+        while (pace.length && t - pace[0] > PACE_WINDOW_MS) pace.shift();
+        furyRef.current = activeRef.current
+          ? momentumStep(
+              furyRef.current,
+              pace.length / (PACE_WINDOW_MS / 1000),
+              server.cpsCap,
+              COMBO_TICK_MS / 1000,
+            )
+          : furyRef.current;
+        comboMultRef.current = momentumMult(furyRef.current);
+      } else if (comboKind === "breath") {
+        comboMultRef.current = breathRef.current.blows > 0 ? breathRef.current.mult : 1;
+      }
+      const fury = Math.round(furyRef.current * 200) / 200;
+      const rest = lastClickRef.current ? Math.min(BREATH.fullMs, t - lastClickRef.current) : 0;
+      const restShown = Math.round(rest / 100) * 100;
+      const { blows, mult } = breathRef.current;
+      const inflight = pendingRef.current + unackedRef.current;
+      setBand((b) =>
+        b.fury === fury &&
+        b.rest === restShown &&
+        b.blows === blows &&
+        b.mult === mult &&
+        b.inflight === inflight
+          ? b
+          : { fury, rest: restShown, blows, mult, inflight },
+      );
+    }, COMBO_TICK_MS);
+    return () => clearInterval(id);
+  }, [comboKind, server.cpsCap]);
 
   // --- 1s clock ---
   useEffect(() => {
@@ -223,7 +305,7 @@ function ClickerArena({ initial }: { initial: BossState }) {
     const raw = rawTimesRef.current;
     const burst = raw.filter((x) => t - x <= CAPTCHA_BURST_WINDOW_MS).length;
 
-    if (o.hits >= CAPTCHA_STREAK_HITS || burst >= server.cpsCap * 3) {
+    if (o.hits >= CAPTCHA_STREAK_HITS || burst >= server.cpsCap * 4) {
       pendingRef.current = 0; // don't submit the abusive backlog
       setCaptcha(makeCaptcha());
       setCaptchaInput("");
@@ -249,10 +331,27 @@ function ClickerArena({ initial }: { initial: BossState }) {
       return;
     }
 
+    if (comboKind === "momentum") {
+      paceRef.current.push(t);
+    } else if (comboKind === "breath") {
+      // the pause before this strike is the breath drawn; then spend a blow
+      const rest = lastClickRef.current ? t - lastClickRef.current : 0;
+      const drawn = breathFrom(rest);
+      if (drawn) {
+        restRef.current = Math.max(restRef.current, rest);
+        breathRef.current = betterBreath(breathRef.current, drawn);
+      }
+      const held = breathRef.current;
+      if (held.blows > 0) {
+        breathRef.current =
+          held.blows > 1 ? { blows: held.blows - 1, mult: held.mult } : { blows: 0, mult: 1 };
+      }
+    }
+
     pendingRef.current += 1;
     lastClickRef.current = t;
     flashHurt();
-  }, [server.cpsCap, flashHurt, registerOverCap]);
+  }, [server.cpsCap, comboKind, flashHurt, registerOverCap]);
 
   function solveCaptcha() {
     if (!captcha) return;
@@ -270,140 +369,214 @@ function ClickerArena({ initial }: { initial: BossState }) {
     }
   }
 
-  const hpPct = Math.max(0, Math.min(100, (display.hp / server.maxHp) * 100));
   const spawnsIn = new Date(server.spawnsAt).getTime() - now;
   const expiresIn = new Date(server.expiresAt).getTime() - now;
   const nextIn = new Date(server.nextSpawnsAt).getTime() - now;
 
-  const adminNote = (
-    <AdminBar show={server.viewerIsAdmin} active={server.status === "active"} />
-  );
-
   // ---------- upcoming ----------
   if (server.status === "upcoming") {
     return (
-      <div className={styles.card}>
-        <p className="eyebrow">The Weekly Raid</p>
-        <h1 className={styles.name}>{server.name}</h1>
-        {adminNote}
+      <Stage
+        state={server}
+        eyebrow="The Weekly Raid"
+        clock={{ label: "Wakes in", ms: spawnsIn }}
+        notice={
+          <p className={styles.sub}>
+            {server.blurb ? `${server.blurb} ` : null}
+            {server.mechanic === "clicker"
+              ? `${server.dmgPerClick} damage a click, ${server.cpsCap} clicks a second. `
+              : null}
+            {server.maxHp.toLocaleString("en-US")} health to break.
+          </p>
+        }
+      >
         <BossPortrait image={server.image} name={server.name} dimmed />
-        <p className={styles.lead}>
-          {server.name} returns in{" "}
-          <span className={styles.count}>{fmtDuration(spawnsIn)}</span>.
-        </p>
-        <p className={styles.sub}>
-          {server.blurb ? `${server.blurb} ` : null}
-          {server.mechanic === "clicker"
-            ? `${server.dmgPerClick} damage a click, ${server.cpsCap} clicks a second. `
-            : null}
-          {server.maxHp.toLocaleString()} health — fell it and split{" "}
-          {server.rewardPool.toLocaleString()} coins by the damage you dealt.
-          Fight and fail and you lose {server.penaltyEach.toLocaleString()}.
-        </p>
-      </div>
+      </Stage>
     );
   }
 
   // ---------- ended ----------
   if (server.status === "ended") {
     return (
-      <div className={styles.card}>
-        <p className="eyebrow">The Weekly Raid</p>
-        <h1 className={styles.name}>{server.name}</h1>
-        {adminNote}
-        <BossPortrait
-          image={server.image}
-          name={server.name}
-          fallen={server.slain}
-          dimmed
-        />
-        {server.slain ? (
-          <p className={`${styles.lead} ${styles.won}`}>{server.name} has fallen.</p>
-        ) : (
-          <p className={`${styles.lead} ${styles.lost}`}>
-            {server.name} escaped into the mist.
-          </p>
-        )}
-        <Outcome state={server} />
-        <p className={styles.sub}>
-          Next raid in <span className={styles.count}>{fmtDuration(nextIn)}</span>.
-        </p>
-        <Leaderboard top={server.top} />
-      </div>
+      <Stage
+        state={server}
+        eyebrow="The Weekly Raid"
+        hp={server.hp}
+        mine={server.yourDamage}
+        clock={{ label: "Next raid in", ms: nextIn }}
+        notice={
+          <>
+            <p className={`${styles.lead} ${server.slain ? styles.won : styles.lost}`}>
+              {server.slain ? `${server.name} has fallen.` : `${server.name} escaped into the mist.`}
+            </p>
+            <Outcome state={server} />
+          </>
+        }
+      >
+        <BossPortrait image={server.image} name={server.name} fallen={server.slain} dimmed />
+      </Stage>
     );
   }
 
   // ---------- active ----------
+  let comboBand: React.ReactNode = null;
+  const combo = server.combo;
+  if (combo?.kind === "momentum") {
+    const tier = momentumTier(band.fury);
+    comboBand = (
+      <ComboBand
+        tone="fury"
+        label={<b>{MOMENTUM.tiers[tier]}</b>}
+        bar={band.fury}
+        mult={momentumMult(band.fury)}
+        live={band.fury > 0.02}
+        peak={tier === 3}
+        hint={
+          tier === 3 ? (
+            <>
+              <b>Onslaught.</b> Hold this pace and every blow lands at its hardest.
+            </>
+          ) : (
+            <>
+              Strike fast without stopping to build his wrath. It fades as you slow.
+            </>
+          )
+        }
+      />
+    );
+  } else if (combo?.kind === "breath") {
+    const drawing = band.blows === 0 && band.rest >= 400;
+    const drawn = breathFrom(band.rest);
+    comboBand = (
+      <ComboBand
+        tone="breath"
+        label={
+          band.blows > 0 ? (
+            <>
+              <b>{band.blows}</b> heavy blow{band.blows === 1 ? "" : "s"}
+            </>
+          ) : (
+            <b>{drawing ? "Drawing breath" : "Breath"}</b>
+          )
+        }
+        bar={band.blows > 0 ? band.blows / BREATH.blows : drawing ? band.rest / BREATH.fullMs : 0}
+        mult={band.blows > 0 ? band.mult : drawing && drawn ? drawn.mult : 1}
+        note={band.blows > 0 ? "each" : drawing && drawn ? "if you strike now" : "damage"}
+        live={band.blows > 0 || drawing}
+        peak={band.blows === 0 && band.rest >= BREATH.fullMs}
+        hint={
+          band.blows > 0 ? (
+            <>Strike — these blows land heavy. Then stop and breathe again.</>
+          ) : band.rest >= BREATH.fullMs ? (
+            <>
+              <b>A full breath.</b> Strike now: your next {BREATH.blows} blows land at ×
+              {(1 + BREATH.maxBonus).toFixed(1)}.
+            </>
+          ) : (
+            <>
+              Stop striking to draw breath, up to {BREATH.fullMs / 1000} seconds. The longer you
+              hold, the heavier your next blows.
+            </>
+          )
+        }
+      />
+    );
+  } else if (combo?.kind === "corona" && phase) {
+    const inflight = phase.kind === "dark" ? band.inflight : 0;
+    const earned = combo.phase === phase.index && combo.strikes >= CORONA.strikes;
+    const strikes =
+      phase.kind !== "dark"
+        ? 0
+        : Math.min(CORONA.strikes, (combo.phase === phase.index ? combo.strikes : 0) + inflight);
+    comboBand = (
+      <ComboBand
+        tone="corona"
+        label={
+          <>
+            <b>{combo.stacks}</b> corona{combo.stacks === 1 ? "" : "s"}
+          </>
+        }
+        pips={{ lit: combo.stacks, of: CORONA.max }}
+        mult={coronaMult(combo.stacks)}
+        live={combo.stacks > 0}
+        peak={combo.stacks >= CORONA.max}
+        hint={
+          phase.kind === "light" ? (
+            <span className={combo.stacks > 0 ? styles.comboHintWarn : undefined}>
+              {combo.stacks > 0
+                ? "Hold. One strike in the light burns every corona you hold."
+                : "Hold. Nothing is earned in the light."}
+            </span>
+          ) : phase.kind === "dark" ? (
+            earned || combo.stacks >= CORONA.max ? (
+              <>This eclipse&apos;s corona is yours. Keep striking while it is dark.</>
+            ) : (
+              <>
+                <b>
+                  {strikes} / {CORONA.strikes}
+                </b>{" "}
+                strikes this eclipse to earn a corona.
+              </>
+            )
+          ) : (
+            <>Land {CORONA.strikes} strikes in each black sun to earn a corona. Never strike in the light.</>
+          )
+        }
+      />
+    );
+  }
+
   return (
-    <div className={styles.card}>
-      <p className="eyebrow">
-        {server.adminOnly ? "Test Raid — admins only" : "The Weekly Raid — fight now"}
-      </p>
-      <h1 className={styles.name}>{server.name}</h1>
-      {(server.adminOnly || !server.paysOut) && (
-        <p className={styles.testFlag}>
-          {server.adminOnly && "Only admins can see this fight. "}
-          {!server.paysOut && "No coins are paid out for it."}
-        </p>
-      )}
-      {adminNote}
-
-      <div className={styles.hpWrap}>
-        <div className={styles.hpBar}>
-          <div
-            className={styles.hpFill}
-            style={{ width: `${hpPct}%` }}
-            data-low={hpPct < 25 || undefined}
-          />
-        </div>
-        <div className={styles.hpText}>
-          <span className="mono">
-            {display.hp.toLocaleString()} / {server.maxHp.toLocaleString()}
-          </span>
-          <span className="mono">{Math.round(hpPct)}%</span>
-        </div>
-      </div>
-
-      {phase && (
-        <div
-          className={`${styles.eclipse} ${
-            phase.kind === "dark"
-              ? styles.eclipseDark
-              : phase.kind === "light"
-                ? styles.eclipseLight
-                : styles.eclipseNeutral
-          }`}
-        >
-          <span className={styles.eclipseState}>
-            {phase.kind === "dark"
-              ? "The black sun is open"
-              : phase.kind === "light"
-                ? "The light drowns your blows"
-                : "The dusk holds — clean strikes"}
-          </span>
-          <span className={styles.eclipseMult}>hits ×{phase.mult}</span>
-          <span className={`mono ${styles.eclipseClock}`}>
-            {fmtDuration(phase.endsInMs)} →{" "}
-            {phase.nextKind === "dark"
-              ? "black sun"
-              : phase.nextKind === "light"
-                ? "the light"
-                : "the dusk"}
-          </span>
-        </div>
-      )}
-
-      <div
-        className={`${styles.portraitWrap} ${
-          phase?.kind === "dark" ? styles.portraitLit : ""
-        }`}
-      >
-        <BossPortrait
-          ref={portraitRef}
-          image={server.image}
-          name={server.name}
-          onHit={onHit}
-        />
+    <Stage
+      state={server}
+      eyebrow={server.adminOnly ? "Test Raid — admins only" : "The Weekly Raid — fight now"}
+      hp={display.hp}
+      mine={display.mine}
+      clock={{ label: "Ends in", ms: expiresIn }}
+      notice={
+        <>
+          {phase ? (
+            <div
+              className={`${styles.eclipse} ${
+                phase.kind === "dark"
+                  ? styles.eclipseDark
+                  : phase.kind === "light"
+                    ? styles.eclipseLight
+                    : styles.eclipseNeutral
+              }`}
+            >
+              <span className={styles.sun} aria-hidden="true" />
+              <span className={styles.eclipseState}>
+                {phase.kind === "dark"
+                  ? "The black sun is open"
+                  : phase.kind === "light"
+                    ? "The light drowns your blows"
+                    : "The dusk holds — clean strikes"}
+              </span>
+              <span className={styles.eclipseMult}>
+                <small>hits</small> ×{phase.mult}
+              </span>
+              <span className={`mono ${styles.eclipseClock}`}>
+                {fmtDuration(phase.endsInMs)} →{" "}
+                {phase.nextKind === "dark" ? "black sun" : phase.nextKind === "light" ? "the light" : "the dusk"}
+              </span>
+            </div>
+          ) : (
+            <p className={styles.sub}>
+              Strike him — {server.dmgPerClick} damage a blow, {server.cpsCap} blows a second at most.
+            </p>
+          )}
+          {comboBand}
+          {toast && (
+            <p key={toast.key} className={styles.toast}>
+              {toast.msg}
+            </p>
+          )}
+        </>
+      }
+    >
+      <div className={`${styles.portraitWrap} ${phase?.kind === "dark" ? styles.portraitLit : ""}`}>
+        <BossPortrait ref={portraitRef} image={server.image} name={server.name} onHit={onHit} />
         {captcha && (
           <div className={styles.captcha} role="dialog" aria-label="Quick check">
             <p className={styles.captchaTitle}>Quick check</p>
@@ -416,51 +589,17 @@ function ClickerArena({ initial }: { initial: BossState }) {
                 inputMode="numeric"
                 value={captchaInput}
                 autoFocus
-                onChange={(e) =>
-                  setCaptchaInput(e.target.value.replace(/[^\d]/g, "").slice(0, 3))
-                }
+                onChange={(e) => setCaptchaInput(e.target.value.replace(/[^\d]/g, "").slice(0, 3))}
                 onKeyDown={(e) => e.key === "Enter" && solveCaptcha()}
               />
-              <button
-                type="button"
-                className={styles.captchaBtn}
-                onClick={solveCaptcha}
-              >
+              <button type="button" className={styles.captchaBtn} onClick={solveCaptcha}>
                 Continue
               </button>
             </div>
-            {captchaBad && (
-              <p className={styles.captchaErr}>Not quite — try this one.</p>
-            )}
+            {captchaBad && <p className={styles.captchaErr}>Not quite — try this one.</p>}
           </div>
         )}
       </div>
-
-      {toast && (
-        <p key={toast.key} className={styles.toast}>
-          {toast.msg}
-        </p>
-      )}
-
-      <div className={styles.stats}>
-        <span className="rune">
-          <Swords size={14} /> {display.mine.toLocaleString()}
-        </span>
-        <span className="rune">
-          <Users size={14} /> {server.participants}
-        </span>
-        <span className="rune">
-          <Timer size={14} /> {fmtDuration(expiresIn)}
-        </span>
-      </div>
-
-      <p className={styles.sub}>
-        Bounty pool {server.rewardPool.toLocaleString()} coins, split by damage.
-        Everyone who fights and loses forfeits {server.penaltyEach.toLocaleString()}.
-      </p>
-
-      <Leaderboard top={server.top} />
-    </div>
+    </Stage>
   );
 }
-

@@ -16,14 +16,46 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { addCurrency } from "@/lib/unbelievaboat";
+import { rollBossDrop } from "@/lib/equipment-drops";
+import {
+  BOSS_DROP_MIN_SHARE,
+  comboGrace,
+  skipsFirstStall,
+  withFocus,
+  withHaste,
+  withPower,
+  withWard,
+} from "@/lib/equipment";
+import { getGear } from "@/lib/equipment-effects";
 import { isAdmin } from "@/lib/admin";
 import { flagAttempt } from "@/lib/audit";
 import { logger } from "@/lib/logger";
 import { evaluateAchievements } from "@/lib/achievements/engine";
-import { getBossConfig, type BossConfig } from "./config";
+import { later } from "@/lib/background";
+import { capPenalty, getBossConfig, type BossConfig } from "./config";
 import { pickWeeklyTemplate } from "./roster";
 import { eclipseConfig, eclipsePhaseAt } from "./mechanics/eclipse";
-import { sacsOffered, weakpointConfig } from "./mechanics/weakpoint";
+import {
+  BREATH,
+  CORONA,
+  THREADS,
+  betterBreath,
+  breathFrom,
+  comboKindFor,
+  coronaMult,
+  keepsThread,
+  momentumMult,
+  momentumStep,
+  threadsMult,
+  type ComboState,
+} from "./mechanics/combo";
+import {
+  SAC_KINDS,
+  cleanSeq,
+  comboMult,
+  offeredByKind,
+  weakpointConfig,
+} from "./mechanics/weakpoint";
 import { weeklyWindow } from "./window";
 import type { BossState } from "./types";
 
@@ -37,6 +69,45 @@ function clamp(n: number, lo: number, hi: number): number {
 }
 
 type BossRow = Prisma.BossGetPayload<object>;
+
+/** What a fighter's row remembers between batches, per mechanic. */
+type HitMeta = {
+  // weak-point
+  missStreak?: number;
+  stallUntil?: number;
+  combo?: number;
+  /** the legendary gauntlets have already spared this fighter one stall */
+  spared?: boolean;
+  // mini-arena
+  miniCdUntil?: number;
+  th?: { chain: number; recent: string[] };
+  // click race: momentum, breath, corona
+  mo?: number;
+  br?: { bank: number; blows: number; mult: number };
+  co?: { stacks: number; phase: number; strikes: number; done: boolean };
+};
+
+/** A fighter's standing in this boss's combo, from their row. */
+function comboFromMeta(boss: BossRow, raw: unknown): ComboState {
+  const m = (raw ?? {}) as HitMeta;
+  switch (comboKindFor(boss.mechanic, boss.templateKey, boss.params)) {
+    case "momentum":
+      return { kind: "momentum", value: m.mo ?? 0 };
+    case "breath":
+      return { kind: "breath", blows: m.br?.blows ?? 0, mult: m.br?.mult ?? 1 };
+    case "corona":
+      return {
+        kind: "corona",
+        stacks: m.co?.stacks ?? 0,
+        phase: m.co?.phase ?? -1,
+        strikes: m.co?.strikes ?? 0,
+      };
+    case "threads":
+      return { kind: "threads", chain: m.th?.chain ?? 0, recent: m.th?.recent ?? [] };
+    default:
+      return { kind: "streak" };
+  }
+}
 
 /** The click-damage knobs for a boss — snapshotted onto `params` at spawn,
  *  with the legacy BossConfig values as the fallback for pre-roster rows. */
@@ -94,7 +165,7 @@ async function lazyCreateWeekly(cfg: BossConfig): Promise<BossRow | null> {
         blurb: tpl.blurb,
         maxHp: tpl.maxHp,
         rewardPool: tpl.rewardPool,
-        penalty: tpl.penalty,
+        penalty: capPenalty(tpl.penalty),
       }
     : {
         name: cfg.name,
@@ -107,7 +178,7 @@ async function lazyCreateWeekly(cfg: BossConfig): Promise<BossRow | null> {
         blurb: "",
         maxHp: cfg.maxHp,
         rewardPool: cfg.rewardPool,
-        penalty: cfg.penalty,
+        penalty: capPenalty(cfg.penalty),
       };
 
   try {
@@ -309,12 +380,14 @@ export async function getBossState(
   let yourDamage = fresh?.yourDamage ?? 0;
   let yourPayout: number | null = null;
   let yourCooldownUntil: number | null = null;
+  let myMeta: unknown = null;
   if (!fresh && discordId && boss) {
     const mine = await prisma.bossHit.findUnique({
       where: { bossId_discordId: { bossId: boss.id, discordId } },
       select: { damage: true, settled: true, payout: true, meta: true },
     });
     if (mine) {
+      myMeta = mine.meta;
       yourDamage = mine.damage;
       if (mine.settled) yourPayout = mine.payout;
       const m = mine.meta as { stallUntil?: number; miniCdUntil?: number } | null;
@@ -364,7 +437,7 @@ export async function getBossState(
     cpsCap: clk.maxCps,
     dmgPerClick: clk.dmgPerClick,
     rewardPool: boss?.rewardPool ?? cfg.rewardPool,
-    penaltyEach: boss?.penalty ?? cfg.penalty,
+    penaltyEach: capPenalty(boss?.penalty ?? cfg.penalty),
     mechanic: (boss?.mechanic as BossState["mechanic"]) ?? "clicker",
     phase:
       boss?.mechanic === "eclipse" ? eclipseConfig(boss.params) : undefined,
@@ -377,6 +450,10 @@ export async function getBossState(
               sacIntervalMs: w.sacIntervalMs,
               sacTtlMs: w.sacTtlMs,
               dmgPerSac: w.dmgPerSac,
+              missDmg: w.missDmg,
+              comboStep: w.comboStep,
+              comboBonus: w.comboBonus,
+              comboMax: w.comboMax,
               stallMs: w.stallMs,
             };
           })()
@@ -386,6 +463,7 @@ export async function getBossState(
         ? { games: ["typing", "aim", "litany"] }
         : undefined,
     yourCooldownUntil,
+    combo: boss ? comboFromMeta(boss, myMeta) : undefined,
     blurb: boss?.blurb ?? "",
     image: boss?.image ?? "/boss/veyrath-idle",
     adminOnly: boss?.adminOnly ?? false,
@@ -406,8 +484,8 @@ export type HitResult =
 
 /**
  * Land a batch of actions on the live boss. `body` is the raw request body —
- * `{ clicks }` for the clicker / eclipse, `{ sacHits, misses }` for the
- * weak-point. Dispatches on the boss's mechanic.
+ * `{ clicks }` for the clicker / eclipse, `{ seq }` for the weak-point.
+ * Dispatches on the boss's mechanic.
  */
 export async function applyHit(discordId: string, body: unknown): Promise<HitResult> {
   const viewerIsAdmin = isAdmin(discordId);
@@ -422,15 +500,31 @@ export async function applyHit(discordId: string, body: unknown): Promise<HitRes
     : clickBoss(discordId, boss, body);
 }
 
-async function readLastMs(bossId: string, discordId: string, now: number): Promise<number> {
-  const cached = lastHitMs.get(`${bossId}:${discordId}`);
-  if (cached !== undefined) return cached;
+/** When each fighter first struck each boss — what the legendary sword's
+ *  opening seconds are counted from. Read once per instance, then remembered. */
+const firstStrike = new Map<string, number>();
+
+async function firstStrikeMs(bossId: string, discordId: string, now: number): Promise<number> {
+  const key = `${bossId}:${discordId}`;
+  const known = firstStrike.get(key);
+  if (known !== undefined) return known;
   const row = await prisma.bossHit.findUnique({
     where: { bossId_discordId: { bossId, discordId } },
-    select: { lastHitAt: true },
+    select: { createdAt: true },
   });
-  return row ? row.lastHitAt.getTime() : now - 1000;
+  const at = row ? row.createdAt.getTime() : now;
+  firstStrike.set(key, at);
+  if (firstStrike.size > 5000) firstStrike.clear();
+  return at;
 }
+
+/** Each click-race fighter's combo, kept beside `lastHitMs` so a batch
+ *  doesn't cost a read. A cold instance falls back to the row. */
+const clickMeta = new Map<string, HitMeta>();
+
+/** How much wall time a fighter can have banked toward rests (breath): one
+ *  full breath, one batch, and a slow request. */
+const REST_BANK_MS = BREATH.fullMs + 2500 + 1500;
 
 /**
  * Apply `dmg` from `actions` landed actions: bump the boss, run the slay check,
@@ -446,6 +540,13 @@ async function commitDamage(
   now: number,
   meta?: Prisma.InputJsonValue,
 ): Promise<{ state: BossState; applied: number }> {
+  // the sword: more damage, whatever the boss and however it is fought
+  if (dmg > 0) {
+    const gear = await getGear(discordId);
+    if (gear.power > 0 || gear.perks.includes("sword")) {
+      dmg = withPower(dmg, gear, now - (await firstStrikeMs(boss.id, discordId, now)));
+    }
+  }
   if (dmg <= 0 && actions <= 0) {
     if (meta !== undefined) {
       await prisma.bossHit.upsert({
@@ -502,7 +603,10 @@ async function commitDamage(
   return { state, applied: actions };
 }
 
-/** Clicker + eclipse — body `{ clicks }`. */
+/**
+ * Clicker + eclipse — body `{ clicks }`, plus `{ rest }` for a boss whose
+ * combo is `breath`: the longest pause (ms) the fighter took before striking.
+ */
 async function clickBoss(
   discordId: string,
   boss: BossRow,
@@ -512,14 +616,25 @@ async function clickBoss(
   const { dmgPerClick, maxCps } = clickerParams(boss, cfg);
   const key = `${boss.id}:${discordId}`;
   const now = Date.now();
-  const lastMs = await readLastMs(boss.id, discordId, now);
 
-  const elapsedSec = clamp((now - lastMs) / 1000, 0.05, 5);
-  const budget = Math.ceil(maxCps * elapsedSec) + maxCps;
-  const requested = Math.max(
-    0,
-    Math.floor(Number((body as { clicks?: unknown })?.clicks) || 0),
-  );
+  let lastMs = lastHitMs.get(key);
+  let meta = clickMeta.get(key);
+  if (lastMs === undefined || meta === undefined) {
+    const row = await prisma.bossHit.findUnique({
+      where: { bossId_discordId: { bossId: boss.id, discordId } },
+      select: { lastHitAt: true, meta: true },
+    });
+    lastMs ??= row ? row.lastHitAt.getTime() : now - 1000;
+    meta ??= (row?.meta ?? {}) as HitMeta;
+  }
+
+  const gapMs = Math.max(0, now - lastMs);
+  const elapsedSec = clamp(gapMs / 1000, 0.05, 5);
+  // what the cap allows for the time since the last batch, plus two seconds'
+  // worth: batches from a slow connection arrive late and bunched together
+  const budget = Math.ceil(maxCps * elapsedSec) + maxCps * 2;
+  const b = (body ?? {}) as { clicks?: unknown; rest?: unknown };
+  const requested = Math.max(0, Math.floor(Number(b.clicks) || 0));
   const applied = Math.min(requested, budget);
 
   if (requested >= 30 && requested > budget * 5) {
@@ -536,21 +651,93 @@ async function clickBoss(
     return { ok: true, state: await getBossState(discordId), applied: 0 };
   }
 
-  let dmg = applied * dmgPerClick;
+  // --- the combo: what this boss rewards, worked out from the batch alone ---
+  const next: HitMeta = { ...meta };
+  /** the batch in plain clicks' worth, after heavy blows */
+  let worth = applied;
+  let comboMult = 1;
+  let phaseMult = 1;
+
+  const gear = await getGear(discordId);
+  const kind = comboKindFor(boss.mechanic, boss.templateKey, boss.params);
+  if (kind === "momentum") {
+    // pace over the whole gap, so a pause shows up as a slow batch
+    const rate = applied / clamp(gapMs / 1000, 0.5, 120);
+    next.mo = momentumStep(meta.mo ?? 0, rate, maxCps, clamp(gapMs / 1000, 0.05, 120));
+    comboMult = withFocus(momentumMult(next.mo), gear);
+  } else if (kind === "breath") {
+    // a fighter's first batch has no history to measure a rest against, so
+    // it starts with room for one
+    const br = meta.br ?? { bank: REST_BANK_MS, blows: 0, mult: 1 };
+    // a rest has to fit in the time that really passed, less the least time
+    // these clicks could have taken — nobody rests and strikes at once
+    const need = (applied / maxCps) * 1000;
+    const bank = Math.min(REST_BANK_MS, br.bank + gapMs);
+    const claimed = clamp(Number(b.rest) || 0, 0, 60_000);
+    const rest = Math.min(claimed, Math.max(0, bank - need + 300)); // + a little jitter
+    const held = betterBreath({ blows: br.blows, mult: br.mult }, breathFrom(rest));
+    const heavy = Math.min(applied, held.blows);
+    worth = heavy * withFocus(held.mult, gear) + (applied - heavy);
+    next.br = {
+      bank: Math.max(0, bank - need - rest),
+      blows: held.blows - heavy,
+      mult: held.blows - heavy > 0 ? held.mult : 1,
+    };
+  }
+
   if (boss.mechanic === "eclipse") {
-    dmg *= eclipsePhaseAt(
+    const ph = eclipsePhaseAt(
       eclipseConfig(boss.params),
       boss.spawnsAt.toISOString(),
       boss.spawnsAt.getTime(),
       now,
-    ).mult;
+    );
+    phaseMult = ph.mult;
+
+    const co = meta.co ?? { stacks: 0, phase: -1, strikes: 0, done: false };
+    comboMult = withFocus(coronaMult(co.stacks), gear); // what they held coming into this batch
+    let { stacks, phase, strikes, done } = co;
+    if (ph.kind === "light" && ph.sinceMs > CORONA.lightGraceMs + comboGrace(gear)) {
+      stacks = 0; // struck in the light: every corona burns away
+    } else if (ph.kind === "dark") {
+      if (phase !== ph.index) {
+        phase = ph.index;
+        strikes = 0;
+        done = false;
+      }
+      strikes += applied;
+      if (!done && strikes >= CORONA.strikes) {
+        done = true;
+        stacks = Math.min(CORONA.max, stacks + 1);
+      }
+    }
+    next.co = { stacks, phase, strikes, done };
   }
 
-  const { state, applied: a } = await commitDamage(boss, discordId, dmg, applied, now);
-  return { ok: true, state, applied: a };
+  clickMeta.set(key, next);
+  if (clickMeta.size > 5000) clickMeta.clear();
+
+  const dmg = worth * dmgPerClick * phaseMult * comboMult;
+  const { state, applied: a } = await commitDamage(
+    boss,
+    discordId,
+    dmg,
+    applied,
+    now,
+    next as Prisma.InputJsonValue,
+  );
+  return { ok: true, state: { ...state, combo: comboFromMeta(boss, next) }, applied: a };
 }
 
-/** Weak-point (Silt Cardinal) — body `{ sacHits, misses }`. */
+/** A fighter who sends nothing for this long has dropped the combo. Looser
+ *  than the client's own clock (COMBO_IDLE_MS) by a flush and a slow request. */
+const COMBO_IDLE_SERVER_MS = 6500;
+
+/**
+ * Weak-point (Silt Cardinal) — body `{ seq }`: what the fighter did since the
+ * last flush, in order (see `cleanSeq`). The older `{ sacHits, misses }` body,
+ * from a page loaded before this shipped, is read as plain sacs then misses.
+ */
 async function strikeWeakpoint(
   discordId: string,
   boss: BossRow,
@@ -561,9 +748,14 @@ async function strikeWeakpoint(
   const now = Date.now();
   const spawnMs = boss.spawnsAt.getTime();
 
-  const b = (body ?? {}) as { sacHits?: unknown; misses?: unknown };
-  const sacHits = Math.max(0, Math.floor(Number(b.sacHits) || 0));
-  const misses = Math.max(0, Math.floor(Number(b.misses) || 0));
+  const b = (body ?? {}) as { seq?: unknown; sacHits?: unknown; misses?: unknown };
+  const seq =
+    typeof b.seq === "string"
+      ? cleanSeq(b.seq)
+      : cleanSeq(
+          "0".repeat(Math.min(32, Math.max(0, Math.floor(Number(b.sacHits) || 0)))) +
+            "m".repeat(Math.min(32, Math.max(0, Math.floor(Number(b.misses) || 0)))),
+        );
 
   const existing = await prisma.bossHit.findUnique({
     where: { bossId_discordId: { bossId: boss.id, discordId } },
@@ -574,25 +766,57 @@ async function strikeWeakpoint(
     (existing ? existing.lastHitAt.getTime() : now - 1000);
   lastHitMs.set(key, now);
 
-  const meta = (existing?.meta ?? {}) as {
-    missStreak?: number;
-    stallUntil?: number;
-  };
+  const meta = (existing?.meta ?? {}) as HitMeta;
+  const gear = await getGear(discordId);
   let missStreak = meta.missStreak ?? 0;
   let stallUntil = meta.stallUntil ?? 0;
+  let spared = meta.spared ?? false;
+  let combo =
+    now - lastMs > COMBO_IDLE_SERVER_MS + comboGrace(gear) ? 0 : Math.max(0, meta.combo ?? 0);
 
   const elapsedSec = clamp((now - lastMs) / 1000, 0.05, 5);
   let credited = 0;
+  let dmg = 0;
 
-  if (stallUntil <= now) {
-    const offered = sacsOffered(p, lastMs - spawnMs, now - spawnMs);
+  if (stallUntil > now) {
+    combo = 0; // the rot has their arm; nothing lands
+  } else {
+    const offered = offeredByKind(
+      p,
+      boss.spawnsAt.toISOString(),
+      lastMs - spawnMs,
+      now - spawnMs,
+    );
     const budget = Math.ceil(p.maxSacsPerSec * elapsedSec) + p.maxSacsPerSec;
-    credited = Math.min(sacHits, offered, budget);
+    // a grazing swing pays a little, but only a couple a second: flailing at
+    // the air must never rival actually lancing something
+    const grazeBudget = Math.ceil(2 * elapsedSec) + 2;
+    const used = SAC_KINDS.map(() => 0);
+    let claimed = 0;
+    let misses = 0;
 
-    if (sacHits >= 15 && sacHits > offered * 4) {
+    for (const ch of seq) {
+      if (ch === "m") {
+        if (misses < grazeBudget) dmg += p.missDmg;
+        misses += 1;
+        combo = 0;
+        continue;
+      }
+      claimed += 1;
+      const k = Number(ch);
+      // not on offer in this window, or past the pace cap: it never happened
+      if (used[k] >= offered[k] || credited >= budget) continue;
+      used[k] += 1;
+      credited += 1;
+      dmg += p.dmgPerSac * SAC_KINDS[k].mult * withFocus(comboMult(p, combo), gear);
+      combo += 1;
+    }
+
+    const onOffer = offered.reduce((n, x) => n + x, 0);
+    if (claimed >= 15 && claimed > onOffer * 4) {
       flagAttempt(discordId, SECTION, "weakpoint impossible claims", {
-        sacHits,
-        offered,
+        claimed,
+        offered: onOffer,
         elapsedSec: Number(elapsedSec.toFixed(2)),
       });
     }
@@ -602,20 +826,25 @@ async function strikeWeakpoint(
     const net = misses - credited;
     missStreak = net > 0 ? missStreak + net : 0;
     if (missStreak >= p.stallAt) {
-      stallUntil = now + p.stallMs;
       missStreak = 0;
-      credited = 0; // the rot bites this flush
+      if (skipsFirstStall(gear) && !spared) {
+        spared = true; // the legendary gauntlets shrug off the first one
+      } else {
+        stallUntil = now + withHaste(p.stallMs, gear);
+        credited = 0; // the rot bites this flush
+        dmg = 0;
+        combo = 0;
+      }
     }
   }
 
-  const dmg = credited * p.dmgPerSac;
   const { state, applied } = await commitDamage(
     boss,
     discordId,
     dmg,
     credited,
     now,
-    { missStreak, stallUntil } as Prisma.InputJsonValue,
+    { missStreak, stallUntil, combo, ...(spared ? { spared } : {}) } as Prisma.InputJsonValue,
   );
   return {
     ok: true,
@@ -641,22 +870,46 @@ export async function applyMiniDamage(
   bossId: string,
   dmg: number,
   cooldownUntil: number,
-): Promise<BossState> {
+  /** The trial just played, and whether it was passed. */
+  run: { game: string; ok: boolean },
+): Promise<{ state: BossState; dmg: number; mult: number }> {
   const boss = await cachedLiveBoss(isAdmin(discordId));
-  if (!boss || boss.id !== bossId) return getBossState(discordId);
+  if (!boss || boss.id !== bossId) {
+    return { state: await getBossState(discordId), dmg: 0, mult: 1 };
+  }
 
-  const clean = Math.max(0, Number.isFinite(dmg) ? dmg : 0);
+  // the thread: each trial passed that is neither of the last two played
+  // adds to it; a repeat or a failure cuts it
+  const row = await prisma.bossHit.findUnique({
+    where: { bossId_discordId: { bossId: boss.id, discordId } },
+    select: { meta: true },
+  });
+  const th = ((row?.meta ?? {}) as HitMeta).th ?? { chain: 0, recent: [] };
+  const kept = run.ok && keepsThread(th.recent, run.game);
+  const mult = kept ? withFocus(threadsMult(th.chain), await getGear(discordId)) : 1;
+  const next = {
+    chain: !run.ok ? 0 : kept ? Math.min(THREADS.max, th.chain + 1) : 1,
+    recent: [...th.recent, run.game].slice(-2),
+  };
+
+  const clean = Math.max(0, Number.isFinite(dmg) ? dmg : 0) * mult;
+  const meta: HitMeta = { miniCdUntil: cooldownUntil, th: next };
   const { state } = await commitDamage(
     boss,
     discordId,
     clean,
     clean > 0 ? 1 : 0,
     Date.now(),
-    { miniCdUntil: cooldownUntil } as Prisma.InputJsonValue,
+    meta as Prisma.InputJsonValue,
   );
   return {
-    ...state,
-    yourCooldownUntil: cooldownUntil > Date.now() ? cooldownUntil : null,
+    state: {
+      ...state,
+      yourCooldownUntil: cooldownUntil > Date.now() ? cooldownUntil : null,
+      combo: comboFromMeta(boss, meta),
+    },
+    dmg: clean,
+    mult,
   };
 }
 
@@ -721,7 +974,7 @@ export async function resolveBoss(bossId?: string): Promise<ResolveResult> {
       paid: true,
       participants: 0,
       totalPaid: 0,
-      penaltyEach: boss?.penalty ?? cfg.penalty,
+      penaltyEach: capPenalty(boss?.penalty ?? cfg.penalty),
       rewardPool: boss?.rewardPool ?? cfg.rewardPool,
       top: [],
       unsettled: 0,
@@ -753,7 +1006,10 @@ export async function resolveBoss(bossId?: string): Promise<ResolveResult> {
       amount = base + remainder;
       reason = `${boss.name} slain — raid bounty`;
     } else {
-      amount = -boss.penalty;
+      // the chestplate: a smaller penalty, or none at all for the legendary
+      // one when the boss was nearly down
+      const hpLeft = Math.max(0, boss.maxHp - boss.dealtDamage) / Math.max(1, boss.maxHp);
+      amount = -withWard(capPenalty(boss.penalty), await getGear(h.discordId), hpLeft);
       reason = `${boss.name} escaped — raid penalty`;
       target = "cash";
     }
@@ -765,12 +1021,14 @@ export async function resolveBoss(bossId?: string): Promise<ResolveResult> {
     if (claim.count === 0) continue;
 
     if (boss.slain) {
-      evaluateAchievements(h.discordId).catch((err) =>
-        logger.error("achievements.eval_call_failed", {
-          discordId: h.discordId,
-          message: String(err),
-        }),
-      );
+      later(() => evaluateAchievements(h.discordId));
+    }
+
+    // a slain boss may leave equipment for each fighter who truly took part.
+    // Claimed above, so it rolls once; a test raid that pays nothing drops nothing.
+    if (boss.slain && boss.paysOut && h.damage >= boss.maxHp * BOSS_DROP_MIN_SHARE) {
+      const top = allHits.slice(0, 3).some((x) => x.id === h.id);
+      await rollBossDrop(h.discordId, boss, top);
     }
 
     try {
@@ -813,7 +1071,7 @@ export async function resolveBoss(bossId?: string): Promise<ResolveResult> {
     paid: boss.paysOut,
     participants: allHits.length,
     totalPaid,
-    penaltyEach: boss.penalty,
+    penaltyEach: capPenalty(boss.penalty),
     rewardPool: boss.rewardPool,
     top: allHits.slice(0, TOP_N).map((h) => ({
       name: nameById.get(h.discordId) ?? "A challenger",
@@ -822,4 +1080,33 @@ export async function resolveBoss(bossId?: string): Promise<ResolveResult> {
     })),
     unsettled,
   };
+}
+
+/** What the strip under the site header says while a raid is on, or null when
+ *  none is. Read from the shared snapshot, so for players it costs nothing
+ *  beyond what the raid already keeps warm. */
+export type RaidBrief = {
+  name: string;
+  expiresAt: string;
+  /** health left, 0..1 */
+  hpLeft: number;
+  penaltyEach: number;
+  adminOnly: boolean;
+};
+
+export async function getRaidBrief(discordId?: string | null): Promise<RaidBrief | null> {
+  try {
+    const snap = await sharedSnapshot(true, isAdmin(discordId));
+    const boss = snap.boss;
+    if (!boss || !snap.live || boss.slain) return null;
+    return {
+      name: boss.name,
+      expiresAt: boss.expiresAt.toISOString(),
+      hpLeft: Math.max(0, Math.min(1, (boss.maxHp - boss.dealtDamage) / boss.maxHp)),
+      penaltyEach: capPenalty(boss.penalty),
+      adminOnly: boss.adminOnly,
+    };
+  } catch {
+    return null;
+  }
 }

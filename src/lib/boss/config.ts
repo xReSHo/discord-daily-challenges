@@ -34,6 +34,14 @@ export type BossConfig = {
   weeklyEnabled: boolean;
 };
 
+/** The most a failed raid may ever cost one fighter, whatever a boss is set
+ *  to. A boss's own penalty sits under this, scaled to how hard it is. */
+export const MAX_BOSS_PENALTY = 5000;
+
+export function capPenalty(n: number): number {
+  return Math.max(0, Math.min(MAX_BOSS_PENALTY, Math.floor(n)));
+}
+
 /** Env-derived defaults — used until the BossConfig row is written, and to
  *  seed the /admin/boss form. */
 export const BOSS_DEFAULTS: BossConfig = {
@@ -44,11 +52,31 @@ export const BOSS_DEFAULTS: BossConfig = {
   dmgPerClick: num("BOSS_DMG_PER_CLICK", 0.1, 0.0001),
   maxCps: Math.floor(num("BOSS_MAX_CPS", 10, 1)),
   spawnDow: intEnv("BOSS_SPAWN_DOW", 6, 0, 6),
-  spawnHour: intEnv("BOSS_SPAWN_HOUR", 16, 0, 23),
+  spawnHour: intEnv("BOSS_SPAWN_HOUR", 0, 0, 23),
   despawnHour: intEnv("BOSS_DESPAWN_HOUR", 23, 0, 23),
   despawnMin: intEnv("BOSS_DESPAWN_MIN", 59, 0, 59),
   weeklyEnabled: true,
 };
+
+/** A `BossConfig` row as config. Fields the row doesn't carry keep their
+ *  env default. */
+export function bossConfigFromRow(row: Partial<BossConfig> | null | undefined): BossConfig {
+  if (!row) return BOSS_DEFAULTS;
+  const d = BOSS_DEFAULTS;
+  return {
+    name: row.name ?? d.name,
+    maxHp: row.maxHp ?? d.maxHp,
+    rewardPool: row.rewardPool ?? d.rewardPool,
+    penalty: row.penalty ?? d.penalty,
+    dmgPerClick: row.dmgPerClick ?? d.dmgPerClick,
+    maxCps: row.maxCps ?? d.maxCps,
+    spawnDow: row.spawnDow ?? d.spawnDow,
+    spawnHour: row.spawnHour ?? d.spawnHour,
+    despawnHour: row.despawnHour ?? d.despawnHour,
+    despawnMin: row.despawnMin ?? d.despawnMin,
+    weeklyEnabled: row.weeklyEnabled ?? d.weeklyEnabled,
+  };
+}
 
 let cache: { at: number; cfg: BossConfig } | null = null;
 const CACHE_MS = 30_000;

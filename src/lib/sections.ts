@@ -1,11 +1,11 @@
 /**
  * The registry of daily challenge sections.
  *
- * `wordle` (P3), `typing` (P4), `aim` (P5), plus `litany` (sequence-memory) are
- * the live games. Each has its own page (`href`).
+ * `wordle` (P3), `typing` (P4), `aim` (P5), `litany` (sequence-memory) and
+ * `braziers` (the fire-lighting puzzle) are the live games. Each has its own page (`href`).
  */
 
-export type SectionId = "wordle" | "typing" | "aim" | "litany" | "geodash";
+export type SectionId = "wordle" | "typing" | "aim" | "litany" | "geodash" | "braziers";
 
 export type SectionConfig = {
   id: SectionId;
@@ -26,7 +26,7 @@ export const SECTIONS: Record<SectionId, SectionConfig> = {
     id: "wordle",
     label: "Wordle",
     href: "/wordle",
-    reward: rewardFromEnv("WORDLE_REWARD_AMOUNT", 250),
+    reward: rewardFromEnv("WORDLE_REWARD_AMOUNT", 1000),
   },
   typing: {
     id: "typing",
@@ -38,7 +38,7 @@ export const SECTIONS: Record<SectionId, SectionConfig> = {
     id: "aim",
     label: "Aim Trainer",
     href: "/aim",
-    reward: rewardFromEnv("AIM_REWARD_AMOUNT", 200),
+    reward: rewardFromEnv("AIM_REWARD_AMOUNT", 750),
   },
   litany: {
     id: "litany",
@@ -53,6 +53,12 @@ export const SECTIONS: Record<SectionId, SectionConfig> = {
     // Nominal only — geodash is a staked game that computes its own payout.
     // This is the base entry cost, shown on the dashboard card.
     reward: rewardFromEnv("GEODASH_ENTRY", 100),
+  },
+  braziers: {
+    id: "braziers",
+    label: "The Braziers",
+    href: "/braziers",
+    reward: rewardFromEnv("BRAZIERS_REWARD_AMOUNT", 3000),
   },
 };
 

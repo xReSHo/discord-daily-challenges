@@ -1,10 +1,11 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { rateLimit, RATE_RULES } from "@/lib/rate-limit";
+import { markDropsSeen } from "@/lib/equipment-drops";
 
-/** POST /api/achievements/seen  body: { keys: string[] }
- *  Marks achievements as having shown their unlock popup, so a reload never
- *  re-shows them. */
+/** POST /api/achievements/seen  body: { keys?: string[], drops?: string[] }
+ *  Marks achievements (by key) and equipment finds (by id) as having shown
+ *  their popup, so a reload never re-shows them. */
 export async function POST(request: Request) {
   const session = await auth();
   const discordId = session?.user?.discordId;
@@ -24,6 +25,11 @@ export async function POST(request: Request) {
 
   const raw = (body as { keys?: unknown })?.keys;
   const keys = Array.isArray(raw) ? raw.filter((k): k is string => typeof k === "string") : [];
+  const rawDrops = (body as { drops?: unknown })?.drops;
+  const drops = Array.isArray(rawDrops)
+    ? rawDrops.filter((k): k is string => typeof k === "string")
+    : [];
+  await markDropsSeen(discordId, drops);
   if (keys.length === 0) {
     return Response.json({ ok: true });
   }

@@ -3,7 +3,7 @@ import { applyHit } from "@/lib/boss/game";
 import { rateLimit, RATE_RULES } from "@/lib/rate-limit";
 
 /** POST /api/boss/hit
- *  body: { clicks } for the clicker/eclipse, { sacHits, misses } for the weak-point. */
+ *  body: { clicks } for the clicker/eclipse, { seq } for the weak-point. */
 export async function POST(request: Request) {
   const session = await auth();
   const discordId = session?.user?.discordId;

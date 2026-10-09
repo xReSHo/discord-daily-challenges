@@ -86,3 +86,46 @@
     transform: none;
   }
 }
+
+/* a piece of equipment found: the same toast, in its rarity's colour */
+.common {
+  --rc: #9a917f;
+}
+.uncommon {
+  --rc: #8fae6b;
+}
+.rare {
+  --rc: #6f9bc4;
+}
+.epic {
+  --rc: #a47cc9;
+}
+.legendary {
+  --rc: #ecca77;
+}
+
+.drop {
+  border-color: var(--rc);
+  box-shadow:
+    var(--shadow),
+    0 0 0 1px color-mix(in srgb, var(--rc) 40%, transparent),
+    0 0 30px -8px var(--rc);
+}
+
+.drop .iconWrap {
+  width: 46px;
+  height: 46px;
+  border-radius: var(--r);
+  background: color-mix(in srgb, var(--rc) 14%, #0b0906);
+  border: 1px solid color-mix(in srgb, var(--rc) 55%, transparent);
+}
+
+.drop .iconWrap img {
+  width: 88%;
+  height: 88%;
+  object-fit: contain;
+}
+
+.drop .eyebrow {
+  color: var(--rc);
+}

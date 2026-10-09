@@ -1,45 +1,36 @@
-.head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 16px 24px;
-  padding-bottom: 26px;
-  margin-bottom: 36px;
-  border-bottom: 1px solid var(--line);
-}
-
-.left {
-  display: flex;
+.title {
+  display: inline-flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
 }
 
 .iconWrap {
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
   border: 1px solid var(--line-gold);
   border-radius: var(--r);
-  color: var(--gold);
-  background: color-mix(in srgb, var(--gold) 6%, transparent);
-}
-
-.title {
-  margin-top: 4px;
-  font-size: clamp(1.7rem, 4vw, 2.3rem);
+  color: var(--gold-bright);
+  background: color-mix(in srgb, var(--bg) 62%, transparent);
+  backdrop-filter: blur(4px);
 }
 
 .meta {
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin-top: 8px;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 9px 14px;
   font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--ink-mute);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r);
+  background: color-mix(in srgb, var(--bg) 66%, transparent);
+  backdrop-filter: blur(4px);
 }
 
 .date {
@@ -54,17 +45,21 @@
   flex-shrink: 0;
 }
 
-@media (max-width: 620px) {
-  .head {
-    align-items: stretch;
-  }
+@media (max-width: 640px) {
   .title {
-    font-size: 1.6rem;
+    gap: 11px;
+  }
+  .iconWrap {
+    width: 34px;
+    height: 34px;
   }
   .meta {
-    width: 100%;
-    margin-top: 14px;
-    padding-top: 14px;
-    border-top: 1px solid var(--line);
+    padding: 7px 11px;
+    font-size: 11px;
+  }
+  /* the day is on the dashboard already; here only the reward is kept */
+  .date,
+  .dot {
+    display: none;
   }
 }

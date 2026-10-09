@@ -1,0 +1,201 @@
+/* Countdown to the weekly raid, burned into the banner artwork.
+
+   It is part of the scene, not a panel on top of it: large numerals in ember
+   light with a wide soft glow, standing in the dark middle of the picture, with
+   a pool of shadow under them so they read wherever the picture is bright.
+   On a wide screen it floats in the centre of the banner; on a narrow one it
+   takes its place in the column under the title. */
+
+.wrap {
+  position: absolute;
+  /* the dark stretch between the title and the lit arches */
+  left: 54%;
+  top: 39%;
+  transform: translate(-50%, -50%);
+  z-index: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(8px, 1vw, 14px);
+  padding: clamp(18px, 2.4vw, 34px) clamp(26px, 4vw, 60px);
+  transition: filter 0.4s var(--ease);
+  /* it is streamed in a moment after the page: let it glow into being */
+  animation: kindle 0.9s ease-out both;
+}
+
+@keyframes kindle {
+  from {
+    opacity: 0;
+  }
+}
+
+/* the scorch: a soft pool of darkness the light sits in */
+.wrap::before {
+  content: "";
+  position: absolute;
+  inset: -8% -6%;
+  z-index: -1;
+  background: radial-gradient(closest-side, rgba(5, 4, 3, 0.74), rgba(5, 4, 3, 0.46) 55%, transparent 100%);
+  filter: blur(6px);
+  pointer-events: none;
+}
+
+.wrap:hover,
+.wrap:focus-visible {
+  filter: brightness(1.2);
+}
+
+.label {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  font-size: clamp(9.5px, 0.5rem + 0.28vw, 12px);
+  font-weight: 600;
+  letter-spacing: 0.34em;
+  text-indent: 0.34em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: #c9a968;
+  opacity: 0.85;
+  text-shadow: 0 0 12px rgba(236, 170, 80, 0.45), 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+
+/* fading gold rules either side of the label */
+.label::before,
+.label::after {
+  content: "";
+  width: clamp(18px, 3vw, 46px);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold));
+}
+
+.label::after {
+  transform: scaleX(-1);
+}
+
+/* the whole clock wavers faintly, like light from a fire */
+.clock {
+  display: flex;
+  align-items: flex-start;
+  animation: waver 5.5s ease-in-out infinite;
+}
+
+@keyframes waver {
+  0%,
+  100% {
+    opacity: 0.92;
+  }
+  38% {
+    opacity: 0.78;
+  }
+  46% {
+    opacity: 0.9;
+  }
+  70% {
+    opacity: 1;
+  }
+}
+
+.part {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* fixed width, so the row does not shiver as the digits change */
+  width: clamp(4.2rem, 2.4rem + 5.4vw, 8.2rem);
+}
+
+/* thin gold seam between the parts */
+.part + .part {
+  border-left: 1px solid transparent;
+  border-image: linear-gradient(to bottom, transparent, rgba(176, 141, 66, 0.55) 30%, rgba(176, 141, 66, 0.55) 60%, transparent) 1;
+}
+
+.num {
+  font-family: var(--f-display);
+  font-size: clamp(2.5rem, 1.2rem + 4.2vw, 5.4rem);
+  font-weight: 400;
+  line-height: 0.95;
+  letter-spacing: 0.03em;
+  font-variant-numeric: tabular-nums lining-nums;
+  /* molten at the top, cooling to dark ember at the foot */
+  background: linear-gradient(180deg, #fff3cf 0%, #f4cf7c 34%, #cf8f36 72%, #7a4a16 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  /* a tight hot edge, then a wide bloom into the stone around it */
+  filter: drop-shadow(0 0 2px rgba(255, 214, 140, 0.55)) drop-shadow(0 0 18px rgba(236, 150, 50, 0.5))
+    drop-shadow(0 0 46px rgba(210, 120, 30, 0.3));
+}
+
+.unit {
+  margin-top: clamp(6px, 0.8vw, 12px);
+  font-size: clamp(8.5px, 0.46rem + 0.22vw, 11px);
+  font-weight: 600;
+  letter-spacing: 0.3em;
+  text-indent: 0.3em;
+  text-transform: uppercase;
+  color: #a98b55;
+  opacity: 0.8;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+
+/* a raid under way: the same fire, burning red */
+.live .label {
+  color: var(--bad-bright);
+  text-shadow: 0 0 12px rgba(224, 110, 70, 0.5), 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+
+.live .label::before,
+.live .label::after {
+  background: linear-gradient(90deg, transparent, var(--bad-bright));
+}
+
+.live .num {
+  background: linear-gradient(180deg, #ffe6d6 0%, #f09a78 36%, #c4502e 74%, #6e2413 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: drop-shadow(0 0 2px rgba(255, 170, 140, 0.55)) drop-shadow(0 0 18px rgba(224, 90, 50, 0.55))
+    drop-shadow(0 0 46px rgba(190, 60, 30, 0.32));
+}
+
+/* not enough room beside the title: take a place in the column under it */
+@media (max-width: 1000px) {
+  .wrap {
+    position: relative;
+    left: auto;
+    top: auto;
+    transform: none;
+    order: 3;
+    align-self: flex-start;
+    align-items: flex-start;
+    margin-top: 22px;
+    padding: 0;
+  }
+  .wrap::before {
+    inset: -18% -12%;
+  }
+  .label::after {
+    display: none;
+  }
+  .label {
+    text-indent: 0;
+  }
+  .part {
+    width: clamp(4rem, 20vw, 6.4rem);
+  }
+  .part:first-child {
+    align-items: flex-start;
+    width: auto;
+    padding-right: clamp(0.9rem, 4vw, 1.6rem);
+  }
+  .num {
+    font-size: clamp(2.3rem, 11vw, 3.6rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wrap,
+  .clock {
+    animation: none;
+  }
+}

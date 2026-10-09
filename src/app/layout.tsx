@@ -1,6 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import { Cinzel, EB_Garamond, Inter, JetBrains_Mono } from "next/font/google";
 import { Atmosphere } from "@/components/Atmosphere";
+import { ClickSpark } from "@/components/ClickSpark";
+import { GraceEmbers } from "@/components/GraceEmbers";
+import { GracePreload } from "@/components/GracePreload";
+import { PageTransitions } from "@/components/PageTransitions";
 import "./globals.css";
 
 const display = Cinzel({
@@ -32,31 +36,41 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
+  // the site's own address, so the link-preview picture gets a full URL
+  ...(process.env.NEXTAUTH_URL ? { metadataBase: new URL(process.env.NEXTAUTH_URL) } : {}),
   title: "Daily Challenges",
   description: "One grace per day. Face the trial, claim the reward.",
+  // what a posted link shows (the picture is app/opengraph-image.png)
+  openGraph: {
+    title: "Daily Challenges",
+    description: "One grace per day. Face the trial, claim the reward.",
+    siteName: "Daily Challenges",
+    type: "website",
+  },
+  twitter: { card: "summary_large_image" },
 };
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: "(prefers-color-scheme: dark)", color: "#0a0908" },
-    { media: "(prefers-color-scheme: light)", color: "#f2ebdc" },
-  ],
-  colorScheme: "dark light",
+  width: "device-width",
+  initialScale: 1,
+  // let the page run under a phone's notch; the gutters keep text clear of it
+  viewportFit: "cover",
+  themeColor: "#0a0908",
+  colorScheme: "dark",
 };
-
-/** Applied before paint so the saved theme never flashes. Default: dark. */
-const THEME_INIT = `try{var t=localStorage.getItem('theme');document.documentElement.setAttribute('data-theme',t==='light'?'light':'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}`;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      suppressHydrationWarning
       className={`${display.variable} ${serif.variable} ${sans.variable} ${mono.variable}`}
     >
       <body>
-        <script dangerouslySetInnerHTML={{ __html: THEME_INIT }} />
         <Atmosphere />
+        <GracePreload />
+        <GraceEmbers />
+        <ClickSpark />
+        <PageTransitions />
         {children}
       </body>
     </html>

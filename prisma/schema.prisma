@@ -259,7 +259,7 @@ model GameScore {
   discordId String
   section   String
   date      DateTime @db.Date
-  /// "wpm" | "aimMs" | "litanyRound" | "geoPercent"
+  /// "wpm" | "aimMs" | "litanyRound" | "geoPercent" | "brazierTouches"
   metric    String
   value     Float
   createdAt DateTime @default(now())
@@ -380,6 +380,9 @@ model Purchase {
 
 // --- Website assistant: upstream (Gemini) failures ---
 
+/// RETIRED: the site chatbot was removed, so nothing writes or reads this table
+/// any more. The model stays so the table (and its history) is left alone; it
+/// can be dropped in a later migration.
 /// One row each time the site's chat assistant fails to get a reply from its
 /// language model. `notified` flips once the owner has been DM'd about it; the
 /// notifier throttles so an outage sends one DM, not hundreds. Surfaced on /admin.
@@ -398,8 +401,8 @@ model ChatIncident {
 // --- Achievements ---
 
 /// One row per (user, achievement) unlock. The catalog itself (name, icon,
-/// description, reward) lives in code at src/lib/achievements/catalog.ts — this
-/// table is only unlock state. `seenAt` gates the unlock popup: null until the
+/// description, reward) lives in `AchievementDef` — this table is only unlock
+/// state. `seenAt` gates the unlock popup: null until the
 /// toast has shown it once. `rewardGranted` tracks whether the reward side-effect
 /// (coin payout / Discord role grant) actually landed; false rows are retried
 /// opportunistically the next time this user's achievements are evaluated.
@@ -421,8 +424,188 @@ model Achievement {
 /// `disabled` takes the game offline (page shows a notice, mutating APIs 503);
 /// `note` is the player-facing reason.
 model SectionStatus {
-  section   String   @id // wordle | typing | aim | litany | geodash
+  section   String   @id // wordle | typing | aim | litany | geodash | braziers
   disabled  Boolean  @default(false)
+  /// Removed from the site entirely: no dashboard card, page 404s, APIs 503,
+  /// and it stops counting toward a "perfect day".
+  hidden    Boolean  @default(false)
+  /// Live reward override. null = the default in src/lib/sections.ts.
+  reward    Int?
+  /// Live "number of tries" override — what it counts differs per game, see
+  /// TRIES in src/lib/section-status.ts. null = that game's default.
+  tries     Int?
   note      String?
+  updatedAt DateTime @updatedAt
+}
+
+/// Which games a player had to clear for `date` to count as a perfect day.
+/// Written the first time anyone completes a game that day (from the games
+/// live at that moment) and narrowed if an admin switches a game off mid-day.
+/// No row = the original five games (days before this table existed).
+model DayRequirement {
+  date     DateTime @id @db.Date
+  sections String[]
+}
+
+// --- Admin: second-factor credentials, audit trail, live settings ---
+
+/// Password + authenticator secret for one admin (who must also be on the
+/// ADMIN_DISCORD_IDS allowlist). `passwordHash` is scrypt; `totpSecretEnc` is
+/// AES-256-GCM under a key derived from AUTH_SECRET, so a database leak alone
+/// yields neither factor. `sessionNonce` is baked into every unlock cookie —
+/// rotating it locks every open admin session.
+model AdminCredential {
+  discordId     String    @id
+  passwordHash  String
+  totpSecretEnc String
+  /// Last accepted 30s time-step, so a code can never be replayed.
+  lastTotpStep  BigInt    @default(0)
+  failedCount   Int       @default(0)
+  lockedUntil   DateTime?
+  sessionNonce  String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+/// One row per admin action (and per unlock attempt). Append-only.
+model AdminAudit {
+  id        String   @id @default(cuid())
+  discordId String
+  action    String
+  detail    Json     @default("{}")
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+/// Small keyed JSON settings edited from /admin (shop open/closed, geodash
+/// fees, …). Absent key = the code default.
+model SiteSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+/// A shop item, edited from /admin/shop. `roleId` "" renders as "Coming soon".
+model ShopItem {
+  id             String    @id // stable slug — the buy key and Purchase.itemId
+  name           String
+  description    String    @default("")
+  emoji          String?
+  price          Int
+  roleId         String    @default("")
+  /// Seconds the role lasts before the bot removes it. 0 = permanent.
+  durationSec    Int       @default(0)
+  /// Total units sellable across everyone. null = unlimited.
+  stock          Int?
+  availableFrom  DateTime?
+  availableUntil DateTime?
+  enabled        Boolean   @default(true)
+  sortOrder      Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+/// An achievement definition, edited from /admin/achievements. `trigger` and
+/// `reward` are small JSON shapes validated in src/lib/achievements/catalog.ts.
+/// Unlock state stays in `Achievement` (keyed by `key`).
+model AchievementDef {
+  key         String   @id
+  name        String
+  description String
+  icon        String   @default("sparkles")
+  trigger     Json
+  reward      Json
+  enabled     Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// --- Equipment (src/lib/equipment.ts, src/lib/equipment-drops.ts) ---
+
+/// One row per piece of equipment a player owns. The unique pair is what
+/// guarantees nobody owns the same piece twice. `pieceId` is a slug from the
+/// catalogue in code; `source` records where it was found.
+model PlayerEquipment {
+  id        String   @id @default(cuid())
+  discordId String
+  pieceId   String
+  source    String
+  createdAt DateTime @default(now())
+
+  @@unique([discordId, pieceId])
+}
+
+/// One row per find. `source` ("trial:<section>:<day>" | "boss:<bossId>") is
+/// unique per player, so a trial or a raid pays out one find at most. A find
+/// of a piece already owned is a `duplicate` and pays `coins` instead;
+/// `coinsPaid` tracks whether they landed. `seenAt` gates the popup.
+model EquipmentDrop {
+  id        String    @id @default(cuid())
+  discordId String
+  source    String
+  pieceId   String
+  duplicate Boolean   @default(false)
+  coins     Int       @default(0)
+  coinsPaid Boolean   @default(false)
+  seenAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@unique([discordId, source])
+  @@index([discordId, seenAt])
+}
+
+// --- The Pit: wagered duels (src/lib/duel) ---
+
+/// One duel. `open` while it waits for an answer (the challenger's moves are
+/// secret until then), `locked` for the instant an answer is being charged,
+/// `done` once fought, `cancelled` if withdrawn. `opponentId` is a Discord id,
+/// or "cpu" for the pit's champion. Moves are five letters of S/G/F.
+/// `paidC` / `paidO`: that side has received whatever the duel owes them.
+/// Coin amounts are BIGINT: a stake has no upper limit worth the name.
+model Duel {
+  id              String    @id @default(cuid())
+  challengerId    String
+  opponentId      String?
+  stake           BigInt
+  challengerMoves String
+  opponentMoves   String?
+  status          String    @default("open")
+  winner          String? // "challenger" | "opponent" | "draw"
+  rounds          Json?
+  scoreC          Int       @default(0)
+  scoreO          Int       @default(0)
+  payout          BigInt    @default(0)
+  rake            BigInt    @default(0)
+  paidC           Boolean   @default(false)
+  paidO           Boolean   @default(false)
+  paidCashC       BigInt    @default(0)
+  paidBankC       BigInt    @default(0)
+  paidCashO       BigInt    @default(0)
+  paidBankO       BigInt    @default(0)
+  mmrC            Int       @default(0)
+  mmrO            Int       @default(0)
+  createdAt       DateTime  @default(now())
+  resolvedAt      DateTime?
+
+  @@index([status, createdAt])
+  @@index([challengerId, status])
+  @@index([opponentId, status])
+}
+
+/// A player's standing in the pit. `mmr` moves only in duels between two
+/// players; `peak` is the highest it has been (rank achievements read it).
+/// The champion's tallies are kept apart and never touch `mmr`.
+model DuelRating {
+  discordId String   @id
+  mmr       Int      @default(1000)
+  peak      Int      @default(1000)
+  wins      Int      @default(0)
+  losses    Int      @default(0)
+  draws     Int      @default(0)
+  cpuWins   Int      @default(0)
+  cpuLosses Int      @default(0)
   updatedAt DateTime @updatedAt
 }

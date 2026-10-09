@@ -23,7 +23,7 @@ import {
 import { getAttempt, recordFail, lockNow } from "@/lib/attempts";
 import { flagAttempt } from "@/lib/audit";
 import { recordScore } from "@/lib/scores";
-import { SECTIONS } from "@/lib/sections";
+import { getSectionReward, getSectionTries } from "@/lib/section-status";
 import {
   getDailyLitany,
   GLYPHS,
@@ -35,8 +35,6 @@ import {
 const SECTION = "litany" as const;
 const TOKEN_TTL_MS = 15 * 60 * 1000;
 
-/** Base prize for sealing at PASS_ROUND. */
-const BASE_PRIZE = SECTIONS.litany.reward;
 /** Each round cleared *past* PASS_ROUND adds this to the prize. */
 export const CONTINUE_BONUS = Math.max(
   0,
@@ -44,8 +42,8 @@ export const CONTINUE_BONUS = Math.max(
 );
 
 /** The prize for sealing after clearing `round` (>= PASS_ROUND). */
-export function litanyPrize(round: number): number {
-  return BASE_PRIZE + CONTINUE_BONUS * Math.max(0, round - PASS_ROUND);
+export function litanyPrize(round: number, basePrize: number): number {
+  return basePrize + CONTINUE_BONUS * Math.max(0, round - PASS_ROUND);
 }
 
 /** Client flash timing. The server uses the cycle as the "you can't have seen
@@ -92,7 +90,7 @@ export async function startLitany(discordId: string): Promise<StartResult> {
     maxRound: SEQUENCE_LENGTH,
     flashOnMs: FLASH_ON_MS,
     flashGapMs: FLASH_GAP_MS,
-    basePrize: BASE_PRIZE,
+    basePrize: await getSectionReward(SECTION),
     continueBonus: CONTINUE_BONUS,
     token,
     alreadyCompleted: completed.has(SECTION),
@@ -158,7 +156,7 @@ export async function submitLitany(
   if ((await getAttempt(discordId, SECTION)).failed) {
     return {
       ok: false,
-      reason: "You pushed past the seal earlier — today's rite is lost.",
+      reason: "Today's rite is already lost.",
       locked: true,
     };
   }
@@ -198,10 +196,19 @@ export async function submitLitany(
     return { ok: false, reason: "Malformed round data." };
   }
 
-  // A rejected run — track it (retryable), never a "lost the prize" lock.
-  async function reject(reason: string): Promise<SubmitResult> {
-    await recordFail(discordId, SECTION);
-    return { ok: false, reason };
+  // A failed run. Retryable unless an admin has set a daily try limit
+  // (/admin/games) and this was the last one — then the day locks.
+  const maxTries = await getSectionTries(SECTION);
+  async function reject(reason: string, round?: number): Promise<SubmitResult> {
+    const after = await recordFail(
+      discordId,
+      SECTION,
+      maxTries > 0 ? { lockAt: maxTries } : {},
+    );
+    const base = round == null ? { ok: false as const, reason } : { ok: false as const, reason, round };
+    return after.failed
+      ? { ...base, reason: `${reason} That was your last try for today.`, locked: true }
+      : base;
   }
 
   // rounds fully cleared
@@ -210,8 +217,7 @@ export async function submitLitany(
   // a trailing wrong tap = the player slipped; all-correct taps = a voluntary seal
   const slipped = taps.length > m;
   if (cleared < START_ROUND) {
-    await recordFail(discordId, SECTION);
-    return { ok: false, reason: "The rite broke almost at once.", round: 0 };
+    return reject("The rite broke almost at once.", 0);
   }
 
   // timing: strictly increasing, human gaps
@@ -254,18 +260,13 @@ export async function submitLitany(
   // --- outcome ---
 
   if (cleared < PASS_ROUND) {
-    // didn't pass — retryable, no lock
-    await recordFail(discordId, SECTION);
-    return {
-      ok: false,
-      reason: `Reached round ${cleared}. Clear round ${PASS_ROUND} to pass.`,
-      round: cleared,
-    };
+    // didn't pass
+    return reject(`Reached round ${cleared}. Clear round ${PASS_ROUND} to pass.`, cleared);
   }
 
   if (slipped) {
     // cleared the seal point, chose to continue, and slipped -> lose it all
-    recordScore(discordId, SECTION, "litanyRound", cleared);
+    await recordScore(discordId, SECTION, "litanyRound", cleared);
     await lockNow(discordId, SECTION);
     return {
       ok: false,
@@ -276,8 +277,8 @@ export async function submitLitany(
   }
 
   // sealed at or past PASS_ROUND
-  const prize = litanyPrize(cleared);
+  const prize = litanyPrize(cleared, await getSectionReward(SECTION));
+  await recordScore(discordId, SECTION, "litanyRound", cleared);
   const reward = await completeSection(discordId, SECTION, prize);
-  recordScore(discordId, SECTION, "litanyRound", cleared);
   return { ok: true, round: cleared, prize, reward };
 }

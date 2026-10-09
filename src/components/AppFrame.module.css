@@ -2,20 +2,42 @@
   position: sticky;
   top: 0;
   z-index: 20;
-  border-bottom: 1px solid var(--line);
-  background: color-mix(in srgb, var(--bg) 82%, transparent);
-  backdrop-filter: blur(10px);
+  background:
+    linear-gradient(180deg, rgba(236, 202, 119, 0.04), transparent 70%),
+    color-mix(in srgb, var(--bg) 84%, transparent);
+  backdrop-filter: blur(12px);
+  /* clear of a phone's status bar / notch */
+  padding-top: env(safe-area-inset-top);
+  /* stays put while the page beneath it changes (see "Page transitions") */
+  view-transition-name: site-header;
+}
+
+/* a gold hairline under the header, brightest at the centre */
+.header::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    var(--line),
+    var(--line-gold) 30%,
+    var(--gold-deep) 50%,
+    var(--line-gold) 70%,
+    var(--line)
+  );
 }
 
 .headerInner {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  height: 64px;
+  gap: 12px clamp(14px, 2.4vw, 32px);
+  min-height: 64px;
   /* wider than the page container so the nav has room to breathe */
   width: 100%;
-  max-width: 1400px;
+  max-width: calc(var(--container) + 320px);
   margin-inline: auto;
   padding-inline: var(--pad);
 }
@@ -24,6 +46,7 @@
   display: inline-flex;
   align-items: center;
   gap: 12px;
+  flex-shrink: 0;
   font-size: 13px;
   letter-spacing: 0.18em;
   color: var(--ink);
@@ -39,13 +62,81 @@
   flex-shrink: 0;
 }
 
+.brandName {
+  white-space: nowrap;
+}
+
+/* --- main links --------------------------------------------------------- */
+
+.nav {
+  display: flex;
+  align-items: stretch;
+  gap: clamp(2px, 1vw, 14px);
+  align-self: stretch;
+  min-width: 0;
+}
+
+.navLink {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding-inline: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--ink-mute);
+  transition: color 0.2s var(--ease);
+}
+
+.navLink svg {
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+/* the gold mark under a link: grows on hover, stays on the current page */
+.navLink::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--gold-bright), transparent);
+  transform: scaleX(0);
+  transition: transform 0.3s var(--ease);
+}
+
+.navLink:hover,
+.navLink:focus-visible {
+  color: var(--gold-bright);
+}
+
+.navLink:hover::after,
+.navOn::after {
+  transform: scaleX(1);
+}
+
+.navOn {
+  color: var(--ink);
+}
+
+.navOn svg {
+  color: var(--gold-bright);
+  opacity: 1;
+}
+
 .headerRight {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: clamp(8px, 1.2vw, 14px);
+  margin-left: auto;
+  min-width: 0;
 }
 
-/* coin balance — click to reveal the cash / bank / total breakdown */
+/* coin balance — a coin and a short figure; press it to open the purse */
 .balanceWrap {
   position: relative;
   display: inline-flex;
@@ -54,113 +145,268 @@
 .balance {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
+  gap: 8px;
+  height: 32px;
+  padding: 0 10px 0 4px;
   border: 1px solid var(--line-gold);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--gold) 7%, transparent);
+  background:
+    linear-gradient(180deg, rgba(236, 202, 119, 0.1), rgba(236, 202, 119, 0.02)),
+    color-mix(in srgb, var(--bg) 70%, transparent);
   color: var(--gold);
   cursor: pointer;
-  transition: background 0.2s var(--ease), border-color 0.2s var(--ease);
+  transition:
+    border-color 0.2s var(--ease),
+    box-shadow 0.2s var(--ease);
+}
+
+/* holds the pill's place until the balance arrives, so nothing shifts */
+.balanceGhost {
+  display: inline-block;
+  width: 84px;
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  opacity: 0.6;
 }
 
 .balance:hover,
+.balance:focus-visible,
 .balance[aria-expanded="true"] {
-  background: color-mix(in srgb, var(--gold) 13%, transparent);
   border-color: var(--gold);
+  box-shadow: 0 0 22px -8px var(--gold-glow);
 }
 
-.balance svg {
+/* the coin itself: a struck gold disc */
+.balanceCoin {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
   flex-shrink: 0;
+  border-radius: 50%;
+  color: #1a1409;
+  background: radial-gradient(circle at 35% 30%, var(--gold-bright), var(--gold) 55%, var(--gold-deep));
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 240, 200, 0.35),
+    0 0 10px -2px var(--gold-glow);
 }
 
 .balanceNum {
-  font-family: var(--f-mono);
-  font-size: 12px;
+  font-family: var(--f-display);
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.06em;
   color: var(--gold-bright);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums lining-nums;
 }
 
+.balanceCaret {
+  flex-shrink: 0;
+  opacity: 0.7;
+  transition: transform 0.2s var(--ease);
+}
+
+.balance[aria-expanded="true"] .balanceCaret {
+  transform: rotate(180deg);
+}
+
+/* ---------- the purse ---------- */
 .balanceMenu {
   position: absolute;
-  top: calc(100% + 8px);
+  top: calc(100% + 10px);
   right: 0;
-  min-width: 168px;
-  display: flex;
-  flex-direction: column;
-  padding: 6px;
-  background: linear-gradient(180deg, var(--panel), var(--panel-2)), var(--bg);
+  width: 296px;
+  max-width: calc(100vw - 24px);
+  padding: 18px 18px 14px;
+  text-align: center;
+  background:
+    radial-gradient(130% 70% at 50% 0%, rgba(236, 202, 119, 0.1), transparent 62%),
+    linear-gradient(180deg, var(--panel), var(--panel-2)), var(--bg);
   border: 1px solid var(--line-gold);
   border-radius: var(--r);
-  box-shadow: var(--shadow);
+  box-shadow:
+    var(--shadow),
+    0 0 50px -22px var(--gold-glow);
   z-index: 30;
   transform-origin: top right;
   opacity: 0;
-  transform: translateY(-6px) scale(0.97);
+  visibility: hidden;
+  transform: translateY(-6px) scale(0.98);
   pointer-events: none;
   transition:
-    opacity 0.16s var(--ease),
-    transform 0.16s var(--ease);
+    opacity 0.18s var(--ease),
+    transform 0.18s var(--ease),
+    visibility 0s 0.18s;
+}
+
+/* a hairline of gold along the top edge */
+.balanceMenu::before {
+  content: "";
+  position: absolute;
+  inset: -1px 18% auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold-bright), transparent);
 }
 
 .balanceMenuOpen {
   opacity: 1;
+  visibility: visible;
   transform: translateY(0) scale(1);
   pointer-events: auto;
+  transition:
+    opacity 0.18s var(--ease),
+    transform 0.18s var(--ease);
 }
 
-.balanceRow {
-  display: grid;
-  grid-template-columns: 15px 1fr auto;
-  align-items: center;
-  gap: 9px;
-  padding: 6px 8px;
-  font-size: 11.5px;
-  letter-spacing: 0.02em;
-  color: var(--ink-mute);
-}
-
-.balanceRow svg {
-  color: var(--ink-faint);
-}
-
-.balanceRow b {
-  font-family: var(--f-mono);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: var(--ink-dim);
-}
-
-.balanceTotal {
-  margin-top: 4px;
-  padding-top: 8px;
-  border-top: 1px solid var(--line);
-}
-
-.balanceTotal svg {
+.purseEyebrow {
+  margin: 0;
+  font-family: var(--f-display);
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
   color: var(--gold);
 }
 
-.balanceTotal b {
+.purseTotal {
+  margin: 8px 0 0;
+  font-family: var(--f-display);
+  font-size: 1.55rem;
+  font-weight: 500;
+  line-height: 1.1;
+  letter-spacing: 0.02em;
   color: var(--gold-bright);
+  font-variant-numeric: lining-nums;
+  text-shadow: 0 0 24px var(--gold-glow);
 }
 
-.adminLink {
+.purseTotal small {
+  margin-left: 7px;
+  font-family: var(--f-sans);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  text-shadow: none;
+}
+
+.purseTotalExact {
+  margin: 6px 0 0;
+  font-family: var(--f-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-mute);
+  font-variant-numeric: tabular-nums;
+}
+
+/* how the purse is split: gold for what is on hand, dark for what is banked */
+.purseBar {
+  height: 4px;
+  margin: 16px 0 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--gold) 22%, var(--bg));
+  overflow: hidden;
+}
+
+.purseBar i {
+  display: block;
+  height: 100%;
+  min-width: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--gold), var(--gold-bright));
+}
+
+.purseShares {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.purseShare {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding: 10px 10px 9px;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+}
+
+.purseLabel {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  font-size: 11px;
+  gap: 6px;
+  font-size: 9.5px;
   font-weight: 600;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--ink-mute);
-  transition: color 0.2s;
 }
 
-.adminLink:hover {
+.purseLabel svg {
+  color: var(--gold);
+}
+
+.purseValue {
+  margin-top: 3px;
+  font-family: var(--f-display);
+  font-size: 1.05rem;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  color: var(--ink);
+  font-variant-numeric: lining-nums;
+}
+
+.purseExact {
+  font-family: var(--f-mono);
+  font-size: 9.5px;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.pursePct {
+  position: absolute;
+  top: 9px;
+  right: 10px;
+  font-family: var(--f-mono);
+  font-size: 9.5px;
+  color: var(--ink-faint);
+}
+
+.purseLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  margin-top: 12px;
+  padding: 9px 0 2px;
+  border-top: 1px solid var(--line);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gold);
+  transition: color 0.2s var(--ease);
+}
+
+.purseLink svg {
+  transition: transform 0.2s var(--ease);
+}
+
+.purseLink:hover,
+.purseLink:focus-visible {
   color: var(--gold-bright);
+}
+
+.purseLink:hover svg {
+  transform: translateX(3px);
 }
 
 .who {
@@ -186,10 +432,116 @@
   font-size: 12px;
   color: var(--ink-dim);
   letter-spacing: 0.04em;
+  /* a long Discord name is cut short rather than pushing the header apart */
+  max-width: 14ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.logoutLabel {
+.leaveLabel {
   letter-spacing: inherit;
+}
+
+/* --- a raid is on: a strip under the header on every page ---------------- */
+
+.raid {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  padding: 9px var(--pad);
+  z-index: 5;
+  font-size: 12px;
+  color: var(--ink-dim);
+  background:
+    linear-gradient(90deg, transparent, rgba(189, 90, 60, 0.2) 30%, rgba(189, 90, 60, 0.2) 70%, transparent),
+    var(--bg-2);
+  border-bottom: 1px solid color-mix(in srgb, var(--bad) 55%, transparent);
+  transition: background 0.25s var(--ease);
+  animation: raidIn 0.5s var(--ease) both;
+}
+
+@keyframes raidIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+.raid:hover {
+  background:
+    linear-gradient(90deg, transparent, rgba(189, 90, 60, 0.32) 30%, rgba(189, 90, 60, 0.32) 70%, transparent),
+    var(--bg-2);
+}
+
+.raidLive {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--f-display);
+  font-size: 11px;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--bad-bright);
+  white-space: nowrap;
+}
+
+/* a beating ember */
+.raidLive i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--bad-bright);
+  box-shadow: 0 0 0 0 rgba(224, 138, 106, 0.6);
+  animation: raidBeat 1.6s ease-out infinite;
+}
+
+@keyframes raidBeat {
+  70% {
+    box-shadow: 0 0 0 9px rgba(224, 138, 106, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(224, 138, 106, 0);
+  }
+}
+
+.raidText {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 12px;
+  min-width: 0;
+}
+
+.raidText b {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.raidGo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #1a1409;
+  background: linear-gradient(180deg, #e9a184, var(--bad-bright));
+  border-radius: var(--r);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .raidLive i,
+  .raid {
+    animation: none;
+  }
 }
 
 .backRow {
@@ -214,37 +566,134 @@
 
 .footer {
   border-top: 1px solid var(--line);
-  padding-block: 24px;
+  padding-block: 24px calc(24px + env(safe-area-inset-bottom));
 }
 
 .footerInner {
   display: flex;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 16px;
   font-size: 11px;
   letter-spacing: 0.16em;
   color: var(--ink-mute);
 }
 
+/* --- medium screens: tighten before anything has to move ----------------- */
+
+@media (max-width: 1080px) {
+  .whoName,
+  .leaveLabel {
+    display: none;
+  }
+  .leave {
+    padding: 0.7em;
+  }
+}
+
+/* --- narrow screens: the links get a strip of their own ------------------ */
+
+@media (max-width: 900px) {
+  /* the header scrolls away with the page: on a phone the room is worth more
+     than a pinned bar, and the games need all the height they can get */
+  .header {
+    position: relative;
+  }
+  .headerInner {
+    flex-wrap: wrap;
+    min-height: 0;
+    padding-top: 10px;
+    row-gap: 0;
+  }
+  .nav {
+    order: 3;
+    flex: 0 0 calc(100% + 2 * var(--pad));
+    margin-inline: calc(-1 * var(--pad));
+    margin-top: 10px;
+    padding-inline: calc(var(--pad) - 10px);
+    justify-content: space-between;
+    gap: 0;
+    border-top: 1px solid var(--line);
+    /* more links than fit (an admin on a small phone): scroll, don't squash */
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .nav::-webkit-scrollbar {
+    display: none;
+  }
+  .navLink {
+    flex: 1 0 auto;
+    justify-content: center;
+    min-height: 44px;
+    letter-spacing: 0.14em;
+  }
+  .avatar {
+    width: 30px;
+    height: 30px;
+  }
+}
+
+/* --- phones: one row for the header, and the links as a row of tabs ------- */
+
 @media (max-width: 560px) {
-  .whoName {
+  /* the mark alone stands for the name, so the balance, portrait and leave
+     button sit beside it on one line instead of wrapping under it */
+  .brandName {
     display: none;
   }
-  .logoutLabel {
-    display: none;
-  }
-  .brand span:last-child {
-    font-size: 11px;
+  .headerInner {
+    flex-wrap: wrap;
+    padding-top: 8px;
+    column-gap: 10px;
   }
   .headerRight {
-    gap: 10px;
+    gap: 8px;
   }
-  .balance {
-    padding: 4px 8px;
+  /* the purse spans the screen rather than hanging off its left edge */
+  .balanceWrap {
+    position: static;
   }
-  /* open rightward from the pill so a narrow screen doesn't clip it */
+  .headerInner {
+    position: relative;
+  }
   .balanceMenu {
-    right: auto;
-    left: 0;
-    transform-origin: top left;
+    top: 50px;
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-width: none;
+    transform-origin: top center;
+  }
+  /* every link visible at once, each an equal share of the width: its icon
+     over its name, like the tab bar of an app. Nothing to scroll sideways. */
+  .nav {
+    margin-top: 8px;
+    padding-inline: 4px;
+    overflow: visible;
+  }
+  .navLink {
+    flex: 1 1 0;
+    min-width: 0;
+    flex-direction: column;
+    gap: 5px;
+    padding: 9px 2px 8px;
+    min-height: 52px;
+    font-size: 9.5px;
+    letter-spacing: 0.1em;
+  }
+  .navLink svg {
+    width: 17px;
+    height: 17px;
+  }
+  .navLink::after {
+    left: 18%;
+    right: 18%;
+  }
+}
+
+/* a phone on its side: do not pin a tall header over a short screen */
+@media (max-height: 520px) {
+  .header {
+    position: relative;
   }
 }

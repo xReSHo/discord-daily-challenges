@@ -1,18 +1,22 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
-import { Grid3x3, Keyboard, Crosshair, Orbit } from "lucide-react";
+import { Crosshair, FlameKindling, Grid3x3, Keyboard, Orbit, Swords, Triangle, type LucideIcon } from "lucide-react";
 import { doSignIn } from "./actions";
+import { ArtImage } from "@/components/ArtImage";
 import { Sigil } from "@/components/Sigil";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { getChallengeDateString } from "@/lib/challenge-date";
+import { getVisibleSectionIds } from "@/lib/section-status";
+import { SECTIONS, type SectionId } from "@/lib/sections";
 import styles from "./page.module.css";
 
-const TRIALS = [
-  { icon: Grid3x3, name: "Wordle", line: "Six guesses. One word for all." },
-  { icon: Keyboard, name: "Typing Test", line: "Speed and precision, timed." },
-  { icon: Crosshair, name: "Aim Trainer", line: "Twenty marks. Beat the clock." },
-  { icon: Orbit, name: "The Litany", line: "Recite the rite from memory." },
-];
+const TRIALS: Record<SectionId, { icon: LucideIcon; line: string }> = {
+  wordle: { icon: Grid3x3, line: "Six guesses. One word for all." },
+  typing: { icon: Keyboard, line: "Speed and precision, timed." },
+  aim: { icon: Crosshair, line: "Moving marks. Five misses." },
+  litany: { icon: Orbit, line: "Recite the rite from memory." },
+  geodash: { icon: Triangle, line: "Stake your coin on the gauntlet." },
+  braziers: { icon: FlameKindling, line: "Light the hall in the fewest touches." },
+};
 
 function DiscordMark() {
   return (
@@ -26,9 +30,18 @@ export default async function Home() {
   const session = await auth();
   if (session?.user) redirect("/dashboard");
 
+  // only the trials that are actually on offer (kept in memory for a minute,
+  // so this does not cost a database trip per visitor)
+  const trials = await getVisibleSectionIds();
+
   return (
     <main className={styles.landing}>
-      <ThemeToggle className="theme-toggle--corner" />
+      <div className={styles.backdrop} aria-hidden="true">
+        <ArtImage art="hero" sizes="100vw" eager className={styles.backdropImg} />
+        <span className={styles.backdropFog} />
+        <span className={styles.backdropShade} />
+      </div>
+
       <div className={`container ${styles.inner}`}>
         <section className={`${styles.hero} stagger`}>
           <Sigil size={64} className={styles.sigil} />
@@ -47,7 +60,7 @@ export default async function Home() {
           </p>
 
           <form action={doSignIn} className={styles.cta}>
-            <button type="submit" className="btn btn--gold">
+            <button type="submit" className={`btn btn--gold ${styles.enter}`}>
               <DiscordMark />
               Enter with Discord
             </button>
@@ -60,14 +73,26 @@ export default async function Home() {
           </p>
         </section>
 
-        <section className={styles.trials}>
-          {TRIALS.map(({ icon: Icon, name, line }) => (
-            <article key={name} className={`panel panel--lit ${styles.trial}`}>
-              <Icon size={22} className={styles.trialIcon} strokeWidth={1.4} />
-              <h3 className={styles.trialName}>{name}</h3>
-              <p className={styles.trialLine}>{line}</p>
-            </article>
-          ))}
+        <section className={`${styles.trials} stagger`} aria-label="What awaits">
+          {trials.map((id) => {
+            const { icon: Icon, line } = TRIALS[id];
+            return (
+              <article key={id} className={`panel panel--lit ornate ornate--live ${styles.trial}`}>
+                <Icon size={22} className={styles.trialIcon} strokeWidth={1.4} />
+                <div>
+                  <h2 className={styles.trialName}>{SECTIONS[id].label}</h2>
+                  <p className={styles.trialLine}>{line}</p>
+                </div>
+              </article>
+            );
+          })}
+          <article className={`panel panel--lit ornate ornate--live ${styles.trial}`}>
+            <Swords size={22} className={styles.trialIcon} strokeWidth={1.4} />
+            <div>
+              <h2 className={styles.trialName}>The Weekly Raid</h2>
+              <p className={styles.trialLine}>One great foe. The whole server strikes.</p>
+            </div>
+          </article>
         </section>
       </div>
     </main>

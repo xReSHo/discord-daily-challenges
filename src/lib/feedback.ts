@@ -1,11 +1,9 @@
 /**
- * Feedback backend. Two entry points:
+ * Feedback backend. One entry point:
  *   - `/api/feedback/intake`  — the Discord bot's `/report` command (bot-authed).
  *     The bot DMs the owner itself, so it sends `deliveredByBot: true` and the
  *     row is stored already delivered.
- *   - `/api/feedback`         — the website, from the chat widget's support
- *     fallback (shown when the assistant can't answer). Delivered via webhook /
- *     poll like the old Support widget.
+ * (The website's own report form went away with the site chatbot.)
  *
  * A submission is always stored (`Feedback` row, visible on /admin). When it is
  * NOT pre-delivered by the bot:

@@ -51,8 +51,6 @@ export const RATE_RULES = {
   mutate: ruleFromEnv("RATE_LIMIT_MUTATE", 20),
   /** Starting a fresh timed round. */
   start: ruleFromEnv("RATE_LIMIT_START", 12),
-  /** Assistant chat turns — each one is a model call, so keep it modest. */
-  chat: ruleFromEnv("RATE_LIMIT_CHAT", 15),
   /** The NextAuth endpoints (sign in / callback / session). */
   auth: ruleFromEnv("RATE_LIMIT_AUTH", 20),
   /** Boss arena — very chatty; the real abuse cap is the server CPS clamp,
@@ -79,8 +77,20 @@ function consumeMemory(key: string, rule: RateRule): RateResult {
   return { ok: true, retryAfterSec: 0 };
 }
 
-async function clientIp(): Promise<string> {
+export async function clientIp(): Promise<string> {
   const h = await headers();
+  // Each host states the caller's address in a header of its own and
+  // overwrites whatever the caller sent under that name. Only the host's own
+  // header is trusted: on Vercel a caller could otherwise send Netlify's
+  // header with any address in it and slip past the per-address limits.
+  if (process.env.VERCEL) {
+    return (
+      h.get("x-vercel-forwarded-for")?.split(",")[0]?.trim() ||
+      h.get("x-real-ip") ||
+      h.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      "unknown"
+    );
+  }
   return (
     h.get("x-nf-client-connection-ip") ||
     h.get("x-forwarded-for")?.split(",")[0]?.trim() ||

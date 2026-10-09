@@ -37,6 +37,12 @@ export type WeakpointParams = {
   sacTtlMs: number;
   sacIntervalMs: number;
   dmgPerSac: number;
+  /** What a swing that finds nothing still deals (default: a tenth of a sac). */
+  missDmg?: number;
+  /** Lances in a row per combo step, what a step adds, and the cap. */
+  comboStep?: number;
+  comboBonus?: number;
+  comboMax?: number;
   /** Missed taps before a stall. */
   stallAt: number;
   stallMs: number;

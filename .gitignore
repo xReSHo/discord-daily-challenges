@@ -20,6 +20,7 @@ next-env.d.ts
 # full-res source art — only the optimised public/boss/* + public/geodash/* is committed
 /boss_images/
 /geometry_images/
+/assets-incoming/
 
 # misc
 .DS_Store

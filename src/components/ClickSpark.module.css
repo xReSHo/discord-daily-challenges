@@ -1,0 +1,77 @@
+/* Sparks from clicks on the background (see ClickSpark.tsx). */
+
+.layer {
+  position: fixed;
+  inset: 0;
+  z-index: 70; /* over the page; under the loading screen (80) and toasts (90) */
+  overflow: hidden;
+  pointer-events: none;
+  contain: strict;
+}
+
+/* behind the page, with the drifting embers: where the motes go to float */
+.behind {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  contain: strict;
+}
+
+/* a zero-size anchor at the point of the click */
+.at {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+.at > span {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-radius: 50%;
+  will-change: transform, opacity;
+}
+
+/* the first bright point */
+.flash {
+  width: 14px;
+  height: 14px;
+  background: radial-gradient(closest-side, #fff6dc, rgba(246, 210, 122, 0.7) 45%, transparent);
+}
+
+/* the ring: a thin line of light with a soft band of haze just inside it */
+.ring {
+  width: 380px;
+  height: 380px;
+  border: 1.5px solid rgba(236, 202, 119, 0.5);
+  background: radial-gradient(
+    closest-side,
+    transparent 50%,
+    rgba(222, 196, 140, 0.08) 70%,
+    rgba(222, 196, 140, 0.16) 88%,
+    rgba(236, 202, 119, 0.22) 97%,
+    transparent 100%
+  );
+  box-shadow:
+    0 0 22px rgba(236, 202, 119, 0.22),
+    inset 0 0 26px rgba(236, 202, 119, 0.1);
+}
+
+/* the motes thrown off, which then drift in the background */
+.mote {
+  position: absolute;
+  border-radius: 50%;
+  background: #f1d48a;
+  box-shadow: 0 0 6px 1px rgba(236, 202, 119, 0.45);
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+@media (max-width: 640px) {
+  .ring {
+    width: 260px;
+    height: 260px;
+  }
+}

@@ -1,0 +1,331 @@
+/* The odds of finding equipment: one bar per roll, split by rarity, with the
+   same numbers written under it and the rules beside them. */
+
+.drops {
+  text-align: left;
+}
+
+/* the same rarity colours as the equipment page */
+.common {
+  --rc: #9a917f;
+}
+.uncommon {
+  --rc: #8fae6b;
+}
+.rare {
+  --rc: #6f9bc4;
+}
+.epic {
+  --rc: #a47cc9;
+}
+.legendary {
+  --rc: #ecca77;
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  /* room for the panel's close button */
+  padding-right: 44px;
+}
+
+.title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--f-display);
+  font-size: 1.05rem;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--gold-bright);
+}
+
+.title svg {
+  color: var(--gold);
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--gold);
+  transition: color 0.2s var(--ease);
+}
+
+.link:hover {
+  color: var(--gold-bright);
+}
+
+.link svg {
+  transition: transform 0.2s var(--ease);
+}
+
+.link:hover svg {
+  transform: translateX(3px);
+}
+
+.lead {
+  margin: 8px 0 0;
+  max-width: 70ch;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-dim);
+}
+
+.rolls {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.roll {
+  margin-top: 18px;
+}
+
+.rollHead {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 9px;
+  margin: 0 0 8px;
+  font-size: 11.5px;
+  color: var(--ink-mute);
+}
+
+.rollHead b {
+  font-family: var(--f-display);
+  font-size: 0.9rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.rollHead em {
+  margin-left: auto;
+  font-style: normal;
+  color: var(--gold);
+}
+
+/* the roll itself: a share of the bar for each rarity, the rest is nothing */
+.bar {
+  display: flex;
+  gap: 2px;
+  height: 10px;
+  padding: 2px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: #0b0906;
+}
+
+.bar i {
+  flex-basis: 0;
+  min-width: 4px;
+  background: var(--rc);
+  box-shadow: 0 0 10px -2px var(--rc);
+}
+
+.bar i:first-child {
+  border-radius: 999px 0 0 999px;
+}
+
+.bar .nothing {
+  background: var(--line);
+  box-shadow: none;
+  border-radius: 0 999px 999px 0;
+}
+
+.tiers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tiers li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 1px 8px;
+  flex: 1 1 28%;
+  padding: 9px 12px;
+  border: 1px solid color-mix(in srgb, var(--rc) 35%, var(--line));
+  border-radius: var(--r);
+  background: rgba(11, 9, 6, 0.5);
+}
+
+.tiers i {
+  width: 7px;
+  height: 7px;
+  background: var(--rc);
+  transform: rotate(45deg);
+}
+
+.tiers span {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--rc);
+}
+
+.tiers b {
+  grid-column: 1 / -1;
+  font-family: var(--f-display);
+  font-size: 1.3rem;
+  font-weight: 500;
+  color: var(--ink);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.tiers small {
+  grid-column: 1 / -1;
+  font-size: 10.5px;
+  color: var(--ink-faint);
+}
+
+.tiers .none {
+  --rc: var(--ink-faint);
+  border-style: dashed;
+  border-color: var(--line-2);
+}
+
+.tiers .none b {
+  color: var(--ink-mute);
+}
+
+/* what each slot's piece does, weakest to strongest from this source */
+.gives {
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.givesHead {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 9px;
+  margin: 0 0 8px;
+  font-size: 11.5px;
+  color: var(--ink-mute);
+}
+
+.givesHead b {
+  font-family: var(--f-display);
+  font-size: 0.9rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.givesHead em {
+  font-style: normal;
+  color: var(--rc);
+}
+
+.gives ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gives li {
+  display: grid;
+  grid-template-columns: 92px auto 1fr;
+  align-items: baseline;
+  gap: 10px;
+  padding: 7px 0;
+  font-size: 12px;
+}
+
+.gives li + li {
+  border-top: 1px solid var(--line);
+}
+
+.gives li span {
+  font-family: var(--f-display);
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  color: var(--ink-dim);
+}
+
+.gives li b {
+  font-family: var(--f-display);
+  font-weight: 500;
+  color: var(--gold-bright);
+  font-variant-numeric: lining-nums;
+  white-space: nowrap;
+}
+
+.gives li small {
+  font-size: 11.5px;
+  color: var(--ink-mute);
+}
+
+.rules {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin: 16px 0 0;
+  padding: 14px 0 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--ink-mute);
+}
+
+.rules b {
+  font-weight: 600;
+  color: var(--ink-dim);
+}
+
+.rules em {
+  font-style: normal;
+  color: var(--rc);
+}
+
+.rules span {
+  white-space: nowrap;
+}
+
+.rules .dot {
+  color: var(--ink-faint);
+}
+
+/* what the viewer's own equipment is adding */
+.worn {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12.5px;
+  color: var(--gold-bright);
+}
+
+.gives .worn li {
+  display: block;
+  padding: 0 0 0 12px;
+  font-size: 12.5px;
+  border-top: 0;
+  border-left: 1px solid var(--line-gold);
+}
+
+.wornNone {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-mute);
+}

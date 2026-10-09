@@ -15,6 +15,8 @@ import { prisma } from "@/lib/prisma";
 import { applyMiniDamage, getBossState, liveMiniBoss } from "@/lib/boss/game";
 import type { BossState } from "@/lib/boss/types";
 import { miniAim, miniLitany, miniTyping } from "./content";
+import { withHaste } from "@/lib/equipment";
+import { getGear } from "@/lib/equipment-effects";
 import { scoreMiniAim, scoreMiniLitany, scoreMiniTyping } from "./score";
 
 export const MINI_GAMES = ["typing", "aim", "litany"] as const;
@@ -135,7 +137,15 @@ export async function startMini(
 }
 
 export type MiniSubmitResult =
-  | { ok: true; dmg: number; metric: number; game: MiniGame; state: BossState }
+  | {
+      ok: true;
+      dmg: number;
+      /** What the fighter's thread multiplied this trial's damage by. */
+      mult: number;
+      metric: number;
+      game: MiniGame;
+      state: BossState;
+    }
   | { ok: false; reason: string; state: BossState };
 
 export async function submitMini(
@@ -179,7 +189,8 @@ export async function submitMini(
 
   const p = miniParams(boss.params);
   const seed = seedFor(game, boss.id, discordId, payload.nonce);
-  const cooldownUntil = Date.now() + p.cooldownMs;
+  // the gauntlets: a shorter wait before the next trial
+  const cooldownUntil = Date.now() + withHaste(p.cooldownMs, await getGear(discordId));
 
   let score;
   let dmg = 0;
@@ -213,10 +224,20 @@ export async function submitMini(
     if (score.flag) {
       flagAttempt(discordId, "boss", score.flag.reason, score.flag.detail);
     }
-    const state = await applyMiniDamage(discordId, boss.id, 0, cooldownUntil);
+    const { state } = await applyMiniDamage(discordId, boss.id, 0, cooldownUntil, {
+      game,
+      ok: false,
+    });
     return { ok: false, reason: score.reason, state };
   }
 
-  const state = await applyMiniDamage(discordId, boss.id, dmg, cooldownUntil);
-  return { ok: true, dmg: Math.round(dmg), metric: score.metric, game, state };
+  const landed = await applyMiniDamage(discordId, boss.id, dmg, cooldownUntil, { game, ok: true });
+  return {
+    ok: true,
+    dmg: Math.round(landed.dmg),
+    mult: landed.mult,
+    metric: score.metric,
+    game,
+    state: landed.state,
+  };
 }

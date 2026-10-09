@@ -18,11 +18,14 @@ import {
   type CompleteResult,
 } from "@/lib/completions";
 import { lockNow } from "@/lib/attempts";
+import { getSectionTries } from "@/lib/section-status";
 import { isDevMode } from "@/lib/dev-mode";
 import { getDailyWord } from "./daily";
 import { evaluateGuess, type Mark } from "./evaluate";
 import { ALLOWED_GUESSES } from "./allowed";
 
+/** The classic board height — the default guess limit, and the fewest bars the
+ *  profile's guess-distribution chart ever shows. */
 export const MAX_GUESSES = 6;
 const SECTION = "wordle" as const;
 
@@ -46,13 +49,19 @@ type GameRow = {
 
 const NEW_GAME: GameRow = { guesses: [], won: false, finished: false };
 
-function toView(game: GameRow, word: string, rewarded: boolean): GameView {
+/** Guesses a player gets — live, set in /admin/games. */
+function maxGuesses(): Promise<number> {
+  return getSectionTries(SECTION);
+}
+
+function toView(game: GameRow, word: string, rewarded: boolean, max: number): GameView {
   return {
     rows: game.guesses.map((guess) => ({
       guess,
       marks: evaluateGuess(guess, word),
     })),
-    maxGuesses: MAX_GUESSES,
+    // Never fewer rows than guesses already made (the limit can be lowered mid-day).
+    maxGuesses: Math.max(max, game.guesses.length),
     status: game.won ? "won" : game.finished ? "lost" : "in_progress",
     rewarded,
     answer: game.finished ? word : null,
@@ -77,15 +86,16 @@ export async function getGameView(discordId: string): Promise<GameView> {
   }
 
   // Runs concurrently on the connection pool. getDailyWord is usually cached.
-  const [game, word, completed] = await Promise.all([
+  const [game, word, completed, max] = await Promise.all([
     readGame(discordId, date),
     getDailyWord(),
     getCompletedSectionsToday(discordId),
+    maxGuesses(),
   ]);
   // A finished-but-lost game is a failed challenge for the day — record it so
   // the dashboard / admin log reflect it. Idempotent (upsert to failed).
   if (game.finished && !game.won) await lockNow(discordId, SECTION);
-  return toView(game, word, game.won && completed.has(SECTION));
+  return toView(game, word, game.won && completed.has(SECTION), max);
 }
 
 export type GuessOutcome =
@@ -106,20 +116,21 @@ export async function submitGuess(
   }
 
   const date = getChallengeDate();
-  const [word, game] = await Promise.all([
+  const [word, game, max] = await Promise.all([
     getDailyWord(),
     readGame(discordId, date),
+    maxGuesses(),
   ]);
 
   if (game.finished) {
     const rewarded =
       game.won && (await getCompletedSectionsToday(discordId)).has(SECTION);
-    return { ok: true, view: toView(game, word, rewarded), reward: null };
+    return { ok: true, view: toView(game, word, rewarded, max), reward: null };
   }
 
   const guesses = [...game.guesses, guess];
   const won = guess === word;
-  const finished = won || guesses.length >= MAX_GUESSES;
+  const finished = won || guesses.length >= max;
   const isFirstGuess = game.guesses.length === 0;
 
   // Apply the guess. Both branches guard against a concurrent guess for the
@@ -153,7 +164,7 @@ export async function submitGuess(
     if (fresh.finished && !fresh.won) await lockNow(discordId, SECTION);
     const rewarded =
       fresh.won && (await getCompletedSectionsToday(discordId)).has(SECTION);
-    return { ok: true, view: toView(fresh, word, rewarded), reward: null };
+    return { ok: true, view: toView(fresh, word, rewarded, max), reward: null };
   }
 
   const updated: GameRow = { guesses, won, finished };
@@ -170,7 +181,7 @@ export async function submitGuess(
     await lockNow(discordId, SECTION);
   }
 
-  return { ok: true, view: toView(updated, word, rewarded), reward };
+  return { ok: true, view: toView(updated, word, rewarded, max), reward };
 }
 
 /** Retry the payout for a game that was won but not rewarded (e.g. UnbelievaBoat was down). */

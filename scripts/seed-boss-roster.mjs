@@ -22,7 +22,7 @@ const prisma = new PrismaClient();
 
 const cfg = await prisma.bossConfig.findUnique({ where: { id: "singleton" } });
 const vDmg = cfg?.dmgPerClick ?? 0.1;
-const vCps = cfg?.maxCps ?? 10;
+const vCps = 12;
 
 const TEMPLATES = [
   {
@@ -30,9 +30,9 @@ const TEMPLATES = [
     name: cfg?.name || "Veyrath, The Hollow Sovereign",
     mechanic: "clicker",
     enabled: true,
-    maxHp: cfg?.maxHp ?? 5000,
-    rewardPool: cfg?.rewardPool ?? 10000,
-    penalty: cfg?.penalty ?? 2000,
+    maxHp: 90000,
+    rewardPool: 60000,
+    penalty: 3000,
     image: "/boss/veyrath-idle",
     blurb: "Strike him by clicking — fast, relentless, no tricks.",
     params: { dmgPerClick: vDmg, maxCps: vCps },
@@ -43,13 +43,13 @@ const TEMPLATES = [
     name: "Grieveth, the Drowned Vow",
     mechanic: "clicker",
     enabled: true,
-    maxHp: 18000,
-    rewardPool: 22000,
-    penalty: 3500,
+    maxHp: 52000,
+    rewardPool: 75000,
+    penalty: 4000,
     image: "/boss/grieveth-idle",
     blurb:
       "A war of attrition. He shrugs off bursts — only sustained pressure from the whole raid drowns him.",
-    params: { dmgPerClick: 0.1, maxCps: 6 },
+    params: { dmgPerClick: 0.1, maxCps: 8 },
     sortOrder: 1,
   },
   {
@@ -57,15 +57,15 @@ const TEMPLATES = [
     name: "Nyrrek, the Second Dusk",
     mechanic: "eclipse",
     enabled: true,
-    maxHp: 9000,
-    rewardPool: 14000,
-    penalty: 2500,
+    maxHp: 100000,
+    rewardPool: 70000,
+    penalty: 3500,
     image: "/boss/nyrrek-idle",
     blurb:
       "Watch the eclipse. A clean strike in the dusk, barely a scratch in the light — pour everything in when the black sun opens.",
     params: {
       dmgPerClick: 0.1,
-      maxCps: 10,
+      maxCps: 12,
       darkMult: 2.5,
       neutralMult: 1,
       lightMult: 0.15,
@@ -81,9 +81,9 @@ const TEMPLATES = [
     name: "The Silt Cardinal",
     mechanic: "weakpoint",
     enabled: true,
-    maxHp: 7000,
-    rewardPool: 13000,
-    penalty: 2200,
+    maxHp: 140000,
+    rewardPool: 70000,
+    penalty: 3500,
     image: "/boss/silt-cardinal-idle",
     blurb:
       "Lance the silt-sacs as they surface. Miss too many and the rot seizes your arm.",
@@ -92,8 +92,8 @@ const TEMPLATES = [
       sacTtlMs: 1200,
       sacIntervalMs: 700,
       dmgPerSac: 2,
-      stallAt: 5,
-      stallMs: 2000,
+      stallAt: 7,
+      stallMs: 1500,
       maxSacsPerSec: 3,
     },
     sortOrder: 3,
@@ -103,14 +103,14 @@ const TEMPLATES = [
     name: "The Unraveled Saint",
     mechanic: "miniarena",
     enabled: true,
-    maxHp: 5500,
-    rewardPool: 15000,
-    penalty: 2000,
+    maxHp: 300000,
+    rewardPool: 90000,
+    penalty: 5000,
     image: "/boss/unraveled-saint-idle",
     blurb:
       "Undo him through the reliquary trials — transcription, aim, and the litany. Harder trials tear deeper.",
     params: {
-      cooldownMs: 15_000,
+      cooldownMs: 12_000,
       typing: { dmgBase: 90, dmgCeil: 150, targetWpm: 55, words: 10 },
       aim: {
         dmgBase: 70,

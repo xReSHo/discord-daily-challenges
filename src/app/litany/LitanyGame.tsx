@@ -245,7 +245,7 @@ export function LitanyGame({
             <p>
               {result?.ok === false
                 ? result.reason
-                : "You pushed past the seal and the rite broke earlier today."}
+                : "Today's rite was already lost."}
             </p>
             <p className={styles.muted}>Come back after midnight.</p>
           </div>

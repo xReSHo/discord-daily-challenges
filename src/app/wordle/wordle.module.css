@@ -1,39 +1,197 @@
+/* ============================================================
+   Wordle, as it is known: the board in the middle, the keyboard
+   under it, one column on every screen. The squares are sized to
+   the window, so the whole game is in view on a phone and large
+   on a monitor.
+   ============================================================ */
+
 .board {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  --gap: 7px;
+  /* a phone: as large as the width allows, but never so tall that the
+     keyboard is pushed off the screen */
+  --tile: clamp(
+    40px,
+    min(calc((100vw - 2 * var(--pad) - 4 * var(--gap)) / 5), calc((100dvh - 452px) / var(--rows, 6) - var(--gap))),
+    66px
+  );
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "status"
+    "grid"
+    "result"
+    "keyboard"
+    "legend";
+  justify-items: center;
   gap: 12px;
+  width: 100%;
+  max-width: 520px;
+  animation: rise 0.6s var(--ease) both;
+}
+
+/* a wide screen: larger squares, the same single column */
+@media (min-width: 1000px) {
+  .board {
+    --gap: 8px;
+    --tile: clamp(44px, calc((100dvh - 470px) / var(--rows, 6) - var(--gap)), 68px);
+    gap: 16px;
+    max-width: 540px;
+  }
+}
+
+/* ---------- where the game stands ---------- */
+.status {
+  grid-area: status;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  max-width: calc(5 * var(--tile) + 4 * var(--gap));
+}
+
+.statusLabel {
+  font-family: var(--f-display);
+  font-size: 12px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.statusLabel b {
+  font-weight: 500;
+  color: var(--gold-bright);
+}
+
+.pips {
+  display: inline-flex;
+  gap: 7px;
+}
+
+/* a small diamond per guess */
+.pip {
+  width: 9px;
+  height: 9px;
+  rotate: 45deg;
+  border: 1px solid var(--line-gold);
+  transition:
+    background 0.3s var(--ease),
+    border-color 0.3s var(--ease);
+}
+
+.pipUsed {
+  background: var(--gold-deep);
+  border-color: var(--gold-deep);
+}
+
+.pipWon {
+  background: var(--gold-bright);
+  border-color: var(--gold-bright);
+  box-shadow: 0 0 10px var(--gold-glow);
+}
+
+.pipNow {
+  border-color: var(--gold-bright);
+  animation: pipPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes pipPulse {
+  50% {
+    box-shadow: 0 0 10px 1px var(--gold-glow);
+    background: color-mix(in srgb, var(--gold) 35%, transparent);
+  }
 }
 
 /* ---------- grid ---------- */
+.gridWrap {
+  grid-area: grid;
+  position: relative;
+  align-self: center;
+}
+
 .grid {
   display: grid;
-  grid-template-rows: repeat(6, 1fr);
-  gap: 7px;
-  animation: rise 0.6s var(--ease) both;
+  gap: var(--gap);
 }
 
 .row {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 7px;
+  grid-template-columns: repeat(5, var(--tile));
+  gap: var(--gap);
 }
 
 .tile {
-  width: min(15vw, 58px);
-  height: min(15vw, 58px);
+  width: var(--tile);
+  height: var(--tile);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: var(--f-serif);
-  font-size: min(7vw, 28px);
-  font-weight: 600;
+  font-family: var(--f-display);
+  font-size: calc(var(--tile) * 0.46);
+  font-weight: 500;
+  line-height: 1;
   text-transform: uppercase;
   color: var(--ink);
   background: var(--wordle-empty);
   border: 1px solid var(--line-2);
   border-radius: var(--r);
   user-select: none;
+  transition:
+    border-color 0.2s var(--ease),
+    box-shadow 0.2s var(--ease);
+}
+
+/* the row being written is a shade brighter than the ones still to come */
+.tileLive {
+  border-color: var(--line-gold);
+  background: color-mix(in srgb, var(--raised) 55%, var(--wordle-empty));
+}
+
+/* the square the next letter lands in */
+.tileNext {
+  border-color: var(--gold);
+  box-shadow:
+    0 0 0 1px rgba(200, 162, 76, 0.35),
+    0 0 18px -4px var(--gold-glow);
+  animation: nextPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes nextPulse {
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(200, 162, 76, 0.15),
+      0 0 8px -4px var(--gold-glow);
+  }
+}
+
+/* a problem with the guess: just above the board, clear of the letters */
+.toast {
+  position: absolute;
+  bottom: calc(100% + 3px);
+  left: 50%;
+  z-index: 3;
+  translate: -50% 6px;
+  padding: 7px 14px;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #1a1409;
+  background: linear-gradient(180deg, #f4d98c, var(--gold-bright));
+  border-radius: var(--r);
+  box-shadow: 0 10px 30px -8px rgba(0, 0, 0, 0.9);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.18s var(--ease),
+    translate 0.18s var(--ease);
+}
+
+.toastOn {
+  opacity: 1;
+  translate: -50% 0;
 }
 
 .tileFilled {
@@ -127,9 +285,15 @@
   }
 }
 
-/* ---------- banner ---------- */
+/* ---------- the result, or a word of guidance ---------- */
+.result {
+  grid-area: result;
+  display: grid;
+  place-items: center;
+  width: 100%;
+}
+
 .banner {
-  min-height: 8px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -137,14 +301,22 @@
   text-align: center;
 }
 
-.banner:not(:empty) {
-  margin-top: 8px;
+.hint {
+  font-family: var(--f-serif);
+  font-size: 1.05rem;
+  color: var(--ink-mute);
+}
+
+/* nothing to say while a game is under way: the board speaks for itself */
+.result:has(.bannerIdle) {
+  display: none;
 }
 
 .bannerWon,
 .bannerLost {
   font-family: var(--f-serif);
-  font-size: 1.25rem;
+  font-size: clamp(1.25rem, 1rem + 0.8vw, 1.6rem);
+  line-height: 1.3;
   letter-spacing: 0.02em;
 }
 
@@ -155,14 +327,6 @@
 .bannerLost b {
   color: var(--ink);
   letter-spacing: 0.16em;
-}
-
-.error {
-  min-height: 14px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  color: var(--bad-bright);
 }
 
 .reward {
@@ -181,8 +345,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0.8em 1.6em;
-  font-size: 11px;
+  min-height: 44px;
+  padding: 0.8em 1.8em;
+  font-size: 11.5px;
   font-weight: 700;
   letter-spacing: 0.2em;
   text-transform: uppercase;
@@ -191,6 +356,7 @@
   border: 1px solid var(--gold);
   border-radius: var(--r);
   cursor: pointer;
+  transition: box-shadow 0.2s var(--ease);
 }
 
 .button:hover:not(:disabled) {
@@ -202,44 +368,109 @@
   cursor: default;
 }
 
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  transition: color 0.2s var(--ease);
+}
+
+.backLink:hover {
+  color: var(--gold-bright);
+}
+
+/* ---------- what the colours mean ---------- */
+.legend {
+  grid-area: legend;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 18px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--ink-mute);
+}
+
+.legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.swatch {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  font-family: var(--f-display);
+  font-size: 11px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r);
+}
+
 /* ---------- keyboard ---------- */
 .keyboard {
+  grid-area: keyboard;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 7px;
   width: 100%;
-  max-width: 480px;
 }
 
 .kbRow {
   display: flex;
   justify-content: center;
-  gap: 6px;
+  gap: 5px;
+}
+
+/* the middle row is one key short: inset it, as on a real keyboard */
+.kbRow:nth-child(2) {
+  padding-inline: 5%;
 }
 
 .key {
   flex: 1;
   min-width: 0;
-  max-width: 44px;
-  height: 52px;
+  height: clamp(46px, 7dvh, 58px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0;
   border: 1px solid var(--line-2);
-  border-radius: var(--r);
-  background: var(--panel-2);
-  color: var(--ink-dim);
+  border-radius: 3px;
+  background: linear-gradient(180deg, var(--raised), var(--panel-2));
+  box-shadow: inset 0 1px 0 rgba(236, 202, 119, 0.06);
+  color: var(--ink);
   font-family: var(--f-sans);
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
   text-transform: uppercase;
   cursor: pointer;
+  /* no grey flash or double-tap zoom on a phone */
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
   transition:
     background 0.15s,
     border-color 0.15s,
-    color 0.15s;
+    color 0.15s,
+    transform 0.08s;
 }
 
 .key:hover:not(:disabled) {
   border-color: var(--line-gold);
-  color: var(--ink);
+}
+
+.key:active:not(:disabled) {
+  transform: translateY(1px) scale(0.96);
+  border-color: var(--gold);
 }
 
 .key:disabled {
@@ -247,10 +478,41 @@
 }
 
 .keyWide {
-  max-width: 66px;
   flex: 1.6;
   font-size: 10px;
   letter-spacing: 0.1em;
+}
+
+.keyEnter {
+  color: var(--gold-bright);
+  border-color: var(--line-gold);
+}
+
+/* the word "Enter" only where there is room for it beside the arrow */
+.keyEnter span {
+  display: none;
+}
+
+@media (min-width: 1000px) {
+  .keyboard {
+    gap: 8px;
+  }
+  .kbRow {
+    gap: 6px;
+  }
+  .key {
+    height: clamp(48px, 6.6dvh, 58px);
+    font-size: 16px;
+  }
+  .keyWide {
+    font-size: 11px;
+  }
+  .keyEnter span {
+    display: inline;
+  }
+  .keyEnter svg {
+    display: none;
+  }
 }
 
 .key.correct {
@@ -270,4 +532,11 @@
   background: var(--wordle-absent);
   border-color: var(--wordle-absent-border);
   opacity: 0.7;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pipNow,
+  .tileNext {
+    animation: none;
+  }
 }

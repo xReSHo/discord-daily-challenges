@@ -1,0 +1,15 @@
+/* The ember layer over the loading screen. Hidden — and costing nothing —
+   until GraceEmbers switches it on while a loader is showing. */
+.embers {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 81; /* just over the loading screen (80), under the toast (90) */
+  pointer-events: none; /* the cursor is read from the window, never blocked */
+  display: none;
+}
+
+.embers[data-on] {
+  display: block;
+}

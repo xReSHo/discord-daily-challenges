@@ -3,7 +3,7 @@ import { submitRound } from "@/lib/aim/game";
 import { rateLimit, RATE_RULES } from "@/lib/rate-limit";
 import { sectionGuard } from "@/lib/section-status";
 
-/** POST /api/aim/submit  body: { token, hits: [{ i, x, y, t }] } */
+/** POST /api/aim/submit  body: { token, hits: [{ i, x, y, t }], strays, aspect } */
 export async function POST(request: Request) {
   const session = await auth();
   const discordId = session?.user?.discordId;
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
   }
 
   const b = (body ?? {}) as Record<string, unknown>;
-  const result = await submitRound(discordId, { token: b.token, hits: b.hits });
+  const result = await submitRound(discordId, { token: b.token, hits: b.hits, strays: b.strays, aspect: b.aspect });
 
   return Response.json(result, { status: result.ok ? 200 : 422 });
 }

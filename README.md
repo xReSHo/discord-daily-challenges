@@ -29,7 +29,7 @@ Built with:
 - Streaks and a leaderboard: consecutive days of clearing every challenge are tracked per player and ranked publicly.
 - A personal stats page with streak history, a completion heatmap, and per-game personal bests.
 - A configurable shop where players can spend earned coins on Discord roles, including time-limited passes.
-- A feedback widget for bug reports and suggestions, with an optional AI-assisted chat for answering player questions about the site.
+- Bug reports and suggestions, sent through the Discord bot's `/report` command and listed in the admin panel.
 - Rate limiting and anti-cheat checks on every scored action, with flagged attempts logged for review rather than silently rejected.
 - An admin panel, restricted to a configurable list of Discord user IDs, covering activity, payouts, flagged attempts, support submissions, and per-game on/off switches.
 - A dev mode toggle for admin accounts that removes the daily cooldown for testing, without recording results or paying out rewards.
@@ -85,7 +85,6 @@ Optional, for the features that depend on them:
 | `DISCORD_BOT_TOKEN`, `DISCORD_GUILD_ID` | Role grants from the shop and from achievements |
 | `ADMIN_DISCORD_IDS` | Comma-separated Discord user IDs allowed to open the admin panel |
 | `BOSS_RESOLVE_SECRET` | Shared secret used to authorize an external process settling the weekly boss (see "Weekly boss" below) |
-| `GEMINI_API_KEY` | Enables the optional AI chat assistant |
 
 The full list, including per-game reward amounts, rate limits, and the boss schedule, is documented with comments in `.env.example`. Every optional integration degrades gracefully when unset: the site still runs, it just skips that feature.
 

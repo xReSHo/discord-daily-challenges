@@ -1,5 +1,7 @@
 /** Shared boss types — safe to import from client components (no server deps). */
 
+import type { ComboState } from "./mechanics/combo";
+
 export type BossLeader = {
   rank: number;
   name: string;
@@ -48,6 +50,10 @@ export type BossState = {
     sacIntervalMs: number;
     sacTtlMs: number;
     dmgPerSac: number;
+    missDmg: number;
+    comboStep: number;
+    comboBonus: number;
+    comboMax: number;
     stallMs: number;
   };
   /** Mini-arena trials on offer (mechanic === "miniarena" only). */
@@ -55,6 +61,9 @@ export type BossState = {
   /** Epoch ms this fighter's cooldown lifts (weak-point stall / mini-run
    *  cooldown), or null. */
   yourCooldownUntil?: number | null;
+  /** The habit this boss rewards with more damage, and where this fighter
+   *  stands in it (see mechanics/combo.ts). Absent when there is no boss. */
+  combo?: ComboState;
   /** One-line "how to fight" copy for the arena + the bot spawn embed. */
   blurb: string;
   /** Portrait asset base path — `${image}.webp` / `${image}.png`. */

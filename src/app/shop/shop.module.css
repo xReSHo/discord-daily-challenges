@@ -1,19 +1,9 @@
-.head {
-  padding-block: 4px 24px;
-}
-
-.title {
-  margin-top: 10px;
-  font-size: clamp(1.8rem, 4.5vw, 2.6rem);
-  letter-spacing: -0.01em;
-}
-
 .sub {
   margin-top: 14px;
   max-width: 52ch;
   font-size: 13px;
   line-height: 1.6;
-  color: var(--ink-mute);
+  color: var(--ink-dim);
 }
 
 /* ---------- purse strip ---------- */
@@ -307,4 +297,572 @@
   font-size: 13px;
   line-height: 1.65;
   color: var(--ink-mute);
+}
+
+/* ============================================================
+   Gear: the things a player carries. Each card is the painting
+   of the item on a lit plinth, then what it does, then the
+   facts, then the price — the same order on every card.
+   ============================================================ */
+
+.packLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  padding: 7px 12px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold);
+  border: 1px solid var(--line-gold);
+  border-radius: 999px;
+  transition:
+    color 0.2s var(--ease),
+    border-color 0.2s var(--ease);
+}
+
+.packLink b {
+  min-width: 18px;
+  padding: 1px 5px;
+  font-family: var(--f-mono);
+  font-size: 11px;
+  letter-spacing: 0;
+  text-align: center;
+  color: #1a1409;
+  background: var(--gold);
+  border-radius: 999px;
+}
+
+.packLink:hover {
+  color: var(--gold-bright);
+  border-color: var(--gold);
+}
+
+.packLink svg:last-child {
+  transition: transform 0.2s var(--ease);
+}
+
+.packLink:hover svg:last-child {
+  transform: translateX(3px);
+}
+
+
+.shelfHead {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin-bottom: 18px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.shelfTitle {
+  font-family: var(--f-display);
+  font-size: 1.15rem;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--gold-bright);
+}
+
+.shelfBlurb {
+  font-size: 12.5px;
+  color: var(--ink-mute);
+}
+
+.gearGrid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 620px) {
+  .gearGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 980px) {
+  .gearGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1500px) {
+  .gearGrid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.gear {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: linear-gradient(180deg, var(--panel), var(--panel-2)), var(--bg);
+  overflow: hidden;
+  transition:
+    border-color 0.3s var(--ease),
+    transform 0.3s var(--ease),
+    box-shadow 0.3s var(--ease);
+}
+
+.gear:hover {
+  border-color: var(--line-gold);
+  transform: translateY(-3px);
+  box-shadow:
+    0 24px 50px -28px rgba(0, 0, 0, 0.9),
+    0 0 44px -22px var(--gold-glow);
+}
+
+.gearSpent {
+  opacity: 0.6;
+}
+
+/* the plinth: a pool of warm light the item sits in */
+.gearArt {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 10;
+  background:
+    radial-gradient(60% 70% at 50% 58%, rgba(236, 202, 119, 0.13), transparent 70%),
+    radial-gradient(120% 90% at 50% 110%, rgba(0, 0, 0, 0.55), transparent 60%),
+    #0b0906;
+  border-bottom: 1px solid var(--line);
+}
+
+.gearArt img {
+  width: auto;
+  height: 86%;
+  max-width: 78%;
+  object-fit: contain;
+  filter: drop-shadow(0 14px 18px rgba(0, 0, 0, 0.7));
+  transition: transform 0.5s var(--ease);
+}
+
+.gear:hover .gearArt img {
+  transform: translateY(-4px) scale(1.05);
+}
+
+.gearTags {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+}
+
+.gearTags .tag {
+  background: rgba(11, 9, 6, 0.82);
+  backdrop-filter: blur(4px);
+}
+
+.tagScarce {
+  color: var(--bad-bright);
+  border-color: color-mix(in srgb, var(--bad) 55%, transparent);
+}
+
+.tagHeld {
+  color: var(--ok-bright);
+  border-color: color-mix(in srgb, var(--ok) 45%, transparent);
+}
+
+.gearBody {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: 18px 18px 16px;
+}
+
+.gearName {
+  font-family: var(--f-display);
+  font-size: 1.05rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+}
+
+.gearStat {
+  margin-top: 6px;
+  font-family: var(--f-display);
+  font-size: 1.3rem;
+  line-height: 1.15;
+  color: var(--gold-bright);
+  font-variant-numeric: lining-nums;
+}
+
+.gearEffect {
+  margin-top: 8px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-dim);
+}
+
+.gearFacts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin: 16px 0 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+.gearFacts > div {
+  padding: 8px 10px;
+  min-width: 0;
+}
+
+.gearFacts > div + div {
+  border-left: 1px solid var(--line);
+}
+
+.gearFacts dt {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.gearFacts dd {
+  margin: 4px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+/* what a bundle holds */
+.gearHolds {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 14px 0 0;
+  padding: 6px 10px;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+.gearHolds li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+
+.gearHolds img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+.gearFoot {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 14px;
+  margin-top: auto;
+  padding-top: 16px;
+}
+
+.gearPrice {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  margin: 0;
+  color: var(--gold);
+}
+
+.gearPrice svg {
+  align-self: center;
+}
+
+.gearPrice b {
+  font-family: var(--f-display);
+  font-size: 1.25rem;
+  font-weight: 500;
+  color: var(--gold-bright);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.gearPrice s {
+  font-size: 11.5px;
+  color: var(--ink-faint);
+}
+
+/* the second press: it is about to cost coins, so it looks different */
+.buyConfirm {
+  color: var(--gold-bright);
+  background: color-mix(in srgb, var(--gold) 12%, var(--bg));
+  box-shadow:
+    0 0 0 1px var(--gold-bright),
+    0 0 26px -6px var(--gold-glow);
+}
+
+a.buyState {
+  transition: border-color 0.2s var(--ease);
+}
+
+a.buyState:hover {
+  border-color: var(--ok-bright);
+}
+
+/* phones: the painting beside the words, so a card is one glance tall */
+@media (max-width: 619px) {
+  .packLink {
+    margin-left: 0;
+    width: 100%;
+    justify-content: center;
+  }
+  .gear {
+    display: grid;
+    grid-template-columns: 34% 1fr;
+  }
+  .gearArt {
+    aspect-ratio: auto;
+    border-bottom: 0;
+    border-right: 1px solid var(--line);
+  }
+  .gearArt img {
+    width: 84%;
+    height: auto;
+    max-width: none;
+  }
+  .gearTags {
+    top: 8px;
+    left: 8px;
+    right: auto;
+    align-items: flex-start;
+  }
+  .gearBody {
+    padding: 14px 14px 13px;
+  }
+  .gearStat {
+    font-size: 1.12rem;
+  }
+  .gearFacts dt svg {
+    display: none;
+  }
+  .gearFacts > div {
+    padding: 7px 8px;
+  }
+  .gearFacts dd {
+    font-size: 11.5px;
+  }
+  .gearFoot {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gear,
+  .gearArt img {
+    transition: none;
+  }
+  .gear:hover,
+  .gear:hover .gearArt img {
+    transform: none;
+  }
+}
+
+/* ============================================================
+   The filter: which shelf, and whether to show only what the
+   purse covers. It stays in reach as the shelves scroll past.
+   ============================================================ */
+
+.filter {
+  position: sticky;
+  top: max(0px, calc(var(--under, 0px) - 1px));
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 10px 14px;
+  margin: -14px 0 30px;
+  padding: 12px 0 10px;
+  background: var(--bg);
+  box-shadow: 0 14px 14px -14px rgba(0, 0, 0, 0.9);
+}
+
+.filterTabs {
+  display: flex;
+  flex: 1;
+  gap: 6px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.filterTabs::-webkit-scrollbar {
+  display: none;
+}
+
+.filterTab,
+.filterAfford {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 8px;
+  padding: 8px 13px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--ink-mute);
+  background: linear-gradient(180deg, var(--panel), var(--panel-2)), var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    color 0.2s var(--ease),
+    border-color 0.2s var(--ease),
+    box-shadow 0.2s var(--ease);
+}
+
+.filterTab span {
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+  letter-spacing: 0;
+  color: var(--ink-faint);
+}
+
+.filterTab:hover,
+.filterAfford:hover {
+  color: var(--ink);
+  border-color: var(--line-2);
+}
+
+.filterTab:focus-visible,
+.filterAfford:focus-visible {
+  outline: 1px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.filterTab[aria-pressed="true"],
+.filterAfford[aria-pressed="true"] {
+  color: var(--gold-bright);
+  border-color: var(--line-gold);
+  box-shadow: inset 0 0 18px -8px var(--gold-glow);
+}
+
+.filterTab[aria-pressed="true"] span {
+  color: var(--gold);
+}
+
+.filterAfford svg {
+  color: var(--ink-faint);
+}
+
+.filterAfford[aria-pressed="true"] svg {
+  color: var(--gold);
+}
+
+.wares {
+  display: flex;
+  flex-direction: column;
+  gap: 46px;
+}
+
+/* one shelf at a time */
+.wares[data-cat="raid"] > .shelf:not([data-cat="raid"]),
+.wares[data-cat="boss"] > .shelf:not([data-cat="boss"]),
+.wares[data-cat="consumable"] > .shelf:not([data-cat="consumable"]),
+.wares[data-cat="trial"] > .shelf:not([data-cat="trial"]),
+.wares[data-cat="rank"] > .shelf:not([data-cat="rank"]) {
+  display: none;
+}
+
+/* only what the purse covers; a shelf with nothing left on it goes too */
+.wares[data-afford] .shelf article:not([data-afford]),
+.wares[data-afford] > .shelf:not(:has(article[data-afford])) {
+  display: none;
+}
+
+.filterEmpty {
+  margin: 0;
+  padding: 28px;
+  font-size: 13px;
+  line-height: 1.6;
+  text-align: center;
+  color: var(--ink-mute);
+  border: 1px dashed var(--line-2);
+  border-radius: var(--r);
+}
+
+.filterEmpty button {
+  font: inherit;
+  color: var(--gold);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.filterEmpty button:hover {
+  color: var(--gold-bright);
+}
+
+/* which boss a piece is made against */
+.gearTags .tag,
+.gearBoss {
+  background: rgba(11, 9, 6, 0.82);
+  backdrop-filter: blur(4px);
+}
+
+.gearBoss {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  gap: 5px;
+  color: var(--gold-bright);
+  border-color: var(--line-gold);
+}
+
+.gearBoss i {
+  font-style: normal;
+}
+
+@media (max-width: 619px) {
+  .filter {
+    margin-bottom: 22px;
+  }
+  /* the tabs scroll sideways and fade out where there are more */
+  .filterTabs {
+    mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+    padding-right: 20px;
+  }
+  .filterAfford {
+    padding: 9px 11px;
+  }
+  .filterAfford span {
+    display: none;
+  }
+  .gearBoss {
+    right: 8px;
+    justify-content: center;
+    text-align: center;
+  }
+  .gearBoss i,
+  .gearBoss svg {
+    display: none;
+  }
+  /* on a phone the tags sit top-left already, so the boss goes to the foot */
+  .gearBoss {
+    top: auto;
+    bottom: 8px;
+    left: 8px;
+  }
 }

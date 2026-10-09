@@ -1,21 +1,25 @@
 /**
- * The shop's items. Defined here in code (no admin UI yet). Every item is
- * bought on the site with the coins a player has banked: the price is charged
- * immediately and the Discord bot applies the effect (currently: grant a role).
+ * The shop's items. They live in the `ShopItem` table and are edited from
+ * /admin/shop — no deploy to add a ware, change a price or pull one off the
+ * shelf. Every item is bought on the site with the coins a player has banked:
+ * the price is charged immediately and the Discord bot applies the effect
+ * (currently: grant a role).
  *
  * `effect.roleId` must be a Discord **role** snowflake — in Discord, right-click
  * the role → Copy ID (Developer Mode on). An item whose roleId is still ""
  * renders as "Coming soon" and can't be bought.
  *
- * `effect.durationSec` omitted / 0 → the role is permanent. Set it to a number
- * of seconds for a temporary pass (the bot strips the role when it expires).
+ * `effect.durationSec` 0 → the role is permanent. Set it to a number of
+ * seconds for a temporary pass (the bot strips the role when it expires).
  */
+
+import { prisma } from "@/lib/prisma";
 
 export type ShopEffect = {
   type: "grantRole";
   /** Discord role snowflake to grant on purchase. "" = not wired up yet. */
   roleId: string;
-  /** Seconds the role lasts before the bot removes it. 0 / omitted = permanent. */
+  /** Seconds the role lasts before the bot removes it. 0 = permanent. */
   durationSec?: number;
 };
 
@@ -32,30 +36,73 @@ export type WebsiteShopItem = {
   availableUntil?: string;
   /** Total units ever sellable across everyone. Omit for unlimited. */
   stock?: number;
+  /** Off = not listed and not buyable. */
+  enabled: boolean;
+  sortOrder: number;
   effect: ShopEffect;
 };
 
-export const WEBSITE_SHOP_ITEMS: WebsiteShopItem[] = [
-  // No wares for sale yet — the shop shows its "coming soon" state while this is
-  // empty. Add items here (each needs a real `effect.roleId`) to open it.
-  //
-  // Example:
-  // {
-  //   id: "some-rank",
-  //   name: "Some Rank",
-  //   description: "Grants the rank in Discord.",
-  //   emoji: "✨",
-  //   price: 5000,
-  //   effect: { type: "grantRole", roleId: "<discord role id>" },
-  // },
-];
+type Row = {
+  id: string;
+  name: string;
+  description: string;
+  emoji: string | null;
+  price: number;
+  roleId: string;
+  durationSec: number;
+  stock: number | null;
+  // A string when the row arrived as JSON (the admin page's single query).
+  availableFrom: Date | string | null;
+  availableUntil: Date | string | null;
+  enabled: boolean;
+  sortOrder: number;
+};
 
-export function getWebsiteShopItem(id: string): WebsiteShopItem | undefined {
-  return WEBSITE_SHOP_ITEMS.find((i) => i.id === id);
+function iso(v: Date | string | null): string | undefined {
+  if (v == null) return undefined;
+  if (v instanceof Date) return v.toISOString();
+  // Postgres prints `timestamp` columns without a zone; they are stored in UTC.
+  return new Date(/[zZ]|[+-]\d\d(:?\d\d)?$/.test(v) ? v : `${v}Z`).toISOString();
 }
 
-/** Whether `item` is inside its availability window right now. */
+/** One `ShopItem` row as a shop item — for rows a caller fetched itself. */
+export function shopItemFromRow(r: unknown): WebsiteShopItem {
+  return toItem(r as Row);
+}
+
+function toItem(r: Row): WebsiteShopItem {
+  return {
+    id: r.id,
+    name: r.name,
+    description: r.description,
+    emoji: r.emoji,
+    price: r.price,
+    availableFrom: iso(r.availableFrom),
+    availableUntil: iso(r.availableUntil),
+    stock: r.stock ?? undefined,
+    enabled: r.enabled,
+    sortOrder: r.sortOrder,
+    effect: { type: "grantRole", roleId: r.roleId, durationSec: r.durationSec },
+  };
+}
+
+/** Every item, including switched-off ones — for the admin page. Always read
+ *  fresh: prices are money, so the shop never serves a cached one. */
+export async function getAllShopItems(): Promise<WebsiteShopItem[]> {
+  const rows = await prisma.shopItem.findMany({
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+  });
+  return rows.map(toItem);
+}
+
+export async function getWebsiteShopItem(id: string): Promise<WebsiteShopItem | undefined> {
+  const row = await prisma.shopItem.findUnique({ where: { id } });
+  return row ? toItem(row) : undefined;
+}
+
+/** Whether `item` is switched on and inside its availability window right now. */
 export function isAvailable(item: WebsiteShopItem, now: Date = new Date()): boolean {
+  if (!item.enabled) return false;
   if (item.availableFrom && now < new Date(item.availableFrom)) return false;
   if (item.availableUntil && now > new Date(item.availableUntil)) return false;
   return true;

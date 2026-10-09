@@ -1,64 +1,565 @@
-.head {
-  padding-block: 4px 28px;
-}
-
-.title {
-  margin-top: 10px;
-  font-size: clamp(1.8rem, 4.5vw, 2.6rem);
-  letter-spacing: -0.01em;
-}
+/* ============================================================
+   Leaderboard — three seats at the head of the hall and the rest
+   of the faithful below them.
+   ============================================================ */
 
 .sub {
   margin-top: 14px;
-  max-width: 42ch;
+  max-width: 46ch;
   font-size: 13px;
   line-height: 1.55;
-  color: var(--ink-mute);
+  color: var(--ink-dim);
 }
 
-.list {
-  list-style: none;
+/* --- banner: where the player stands ------------------------------------- */
+
+.standing {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r);
+  background: color-mix(in srgb, var(--bg) 66%, transparent);
+  backdrop-filter: blur(4px);
+  transition: border-color 0.25s var(--ease);
+}
+
+.standing:hover,
+.standing:focus-visible {
+  border-color: var(--gold);
+}
+
+.standingNum {
+  font-family: var(--f-display);
+  font-size: 1.7rem;
+  line-height: 1;
+  color: var(--gold-bright);
+}
+
+.standingLabel {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 3px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
 }
 
-.row {
+.standingLabel small {
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  color: var(--ink-faint);
+}
+
+/* --- the three seats ----------------------------------------------------- */
+
+.podium {
+  --lift: 58px; /* how far a portrait stands above its card */
+  position: relative;
+  list-style: none;
   display: grid;
-  grid-template-columns: 2ch 30px 1fr auto;
+  grid-template-columns: minmax(0, 1fr);
+  gap: calc(var(--lift) + 18px) clamp(14px, 2vw, 26px);
+  padding-top: var(--lift);
+  margin-bottom: clamp(36px, 5vw, 60px);
+}
+
+/* side by side from a tablet up: second, first, third — the first standing
+   tallest, as on a dais */
+@media (min-width: 780px) {
+  .podium {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
+  }
+  .seat1 {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .seat2 {
+    grid-column: 1;
+    grid-row: 1;
+    margin-top: 44px;
+  }
+  .seat3 {
+    grid-column: 3;
+    grid-row: 1;
+    margin-top: 76px;
+  }
+  /* a line of light running behind the seats, with a node at each end */
+  .podium::before {
+    content: "";
+    position: absolute;
+    left: -4%;
+    right: -4%;
+    top: calc(var(--lift) + 150px);
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--line-gold) 12%, var(--gold-deep) 50%, var(--line-gold) 88%, transparent);
+    opacity: 0.55;
+    pointer-events: none;
+  }
+}
+
+.seat {
+  position: relative;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
+  padding: 0 clamp(16px, 2vw, 24px) clamp(20px, 2.4vw, 26px);
+  text-align: center;
+  transition:
+    transform 0.4s var(--ease),
+    border-color 0.4s var(--ease),
+    box-shadow 0.4s var(--ease);
 }
 
-.you {
+.seat:not(.vacant):hover {
+  transform: translateY(-5px);
   border-color: var(--line-gold);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 30%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(236, 202, 119, 0.08),
+    0 30px 50px -28px rgba(0, 0, 0, 0.9),
+    0 0 56px -20px var(--gold-glow);
 }
 
-.rank {
-  font-family: var(--f-mono);
-  font-size: 13px;
+/* the first seat is lit from above */
+.seat1:not(.vacant) {
+  background:
+    radial-gradient(90% 55% at 50% 0%, rgba(236, 202, 119, 0.13), transparent 70%),
+    linear-gradient(180deg, var(--panel), var(--panel-2)),
+    var(--bg);
+  border-color: var(--line-gold);
+}
+
+/* the place, large and faint behind everything, as if cut into the stone */
+.numeral {
+  position: absolute;
+  top: 6px;
+  right: 14px;
+  font-family: var(--f-display);
+  font-size: clamp(3.4rem, 2.6rem + 2.6vw, 5.2rem);
+  line-height: 1;
+  letter-spacing: 0.02em;
+  background: linear-gradient(180deg, rgba(236, 202, 119, 0.3), rgba(236, 202, 119, 0.02) 85%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* the portrait: standing half out of the top of the card, ringed, with a
+   slowly turning orbit around it */
+.medal {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 96px;
+  margin-top: calc(-1 * var(--lift));
+  margin-bottom: 14px;
+}
+
+.seat1 .medal {
+  width: 116px;
+  height: 116px;
+  margin-top: calc(-1 * var(--lift) - 14px);
+}
+
+.face {
+  width: 78%;
+  height: 78%;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--raised);
+  border: 1px solid var(--gold-deep);
+  box-shadow:
+    0 0 0 4px var(--bg),
+    0 0 0 5px var(--line-gold),
+    0 10px 30px -6px rgba(0, 0, 0, 0.9),
+    0 0 34px -6px var(--gold-glow);
+}
+
+/* no picture: the player's initial, cut in gold */
+.face[data-initial],
+.avatar[data-initial] {
+  display: inline-grid;
+  place-items: center;
+  font-family: var(--f-display);
+  color: var(--gold-bright);
+  background: radial-gradient(circle at 50% 35%, var(--raised), var(--bg-2));
+}
+
+.face[data-initial] {
+  font-size: 2rem;
+}
+
+.avatar[data-initial] {
+  font-size: 17px;
+}
+
+.orbit {
+  position: absolute;
+  inset: -7px;
+  border-radius: 50%;
+  border: 1px dashed color-mix(in srgb, var(--gold) 45%, transparent);
+  animation: turn 46s linear infinite;
+}
+
+/* two small bodies on the orbit */
+.orbit::before,
+.orbit::after {
+  content: "";
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--gold-bright);
+  box-shadow: 0 0 8px var(--gold-glow);
+}
+
+.orbit::before {
+  top: -3px;
+  left: 50%;
+}
+
+.orbit::after {
+  bottom: 12%;
+  left: 6%;
+  width: 3px;
+  height: 3px;
+  opacity: 0.7;
+}
+
+@keyframes turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.crown {
+  position: absolute;
+  top: -20px;
+  color: var(--gold-bright);
+  filter: drop-shadow(0 0 8px var(--gold-glow));
+}
+
+.seatTitle {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.seatName {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 100%;
+  margin-top: 8px;
+  font-family: var(--f-display);
+  font-size: clamp(1.15rem, 1rem + 0.7vw, 1.5rem);
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+}
+
+.streak {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.flame {
+  color: var(--bad-bright);
+  align-self: center;
+  flex-shrink: 0;
+}
+
+.streakNum {
+  font-family: var(--f-display);
+  font-size: clamp(2.2rem, 1.8rem + 1.4vw, 3rem);
+  line-height: 1;
+  background: linear-gradient(180deg, #fbeec6 10%, var(--gold-bright) 50%, var(--gold-deep));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.streakLabel {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
   color: var(--ink-mute);
-  text-align: right;
+}
+
+/* --- a player's deeds: the summary anyone may see ------------------------- */
+
+/* five figures: three across, then two — never a gap */
+.deeds {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 1px;
+  width: 100%;
+  margin-top: 18px;
+  border: 1px solid var(--line);
+  background: var(--line);
+}
+
+.deeds > div {
+  grid-column: span 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 11px 6px;
+  background: var(--bg-2);
+}
+
+.deeds > div:nth-child(n + 4) {
+  grid-column: span 3;
+}
+
+.deeds dt {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--ink-faint);
+}
+
+.deeds dt svg {
+  color: var(--gold-deep);
+  flex-shrink: 0;
+}
+
+.deeds dd {
+  font-family: var(--f-mono);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
 
+.games {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 16px;
+  margin-top: 12px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--ink-mute);
+}
+
+.games b {
+  font-family: var(--f-mono);
+  font-weight: 500;
+  color: var(--gold-bright);
+}
+
+/* --- an unclaimed seat --------------------------------------------------- */
+
+.vacant {
+  padding-bottom: 30px;
+  border: 1px dashed var(--line-2);
+  border-radius: var(--r);
+  background: color-mix(in srgb, var(--panel) 45%, transparent);
+}
+
+.vacant .numeral {
+  opacity: 0.6;
+}
+
+.vacant .orbit {
+  animation: none;
+  opacity: 0.5;
+}
+
+.vacant .orbit::before,
+.vacant .orbit::after {
+  display: none;
+}
+
+.faceEmpty {
+  border-style: dashed;
+  border-color: var(--line-2);
+  background: transparent;
+  box-shadow: 0 0 0 4px var(--bg);
+}
+
+.vacant .seatTitle {
+  color: var(--ink-faint);
+}
+
+.vacant .seatName {
+  color: var(--ink-mute);
+  font-size: 1.05rem;
+}
+
+.vacantText {
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--ink-faint);
+}
+
+/* --- section headings: a title between two hairlines ---------------------- */
+
+.heading {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+  font-family: var(--f-display);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.heading::before,
+.heading::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--line-gold));
+}
+
+.heading::after {
+  background: linear-gradient(to left, transparent, var(--line-gold));
+}
+
+.heading span {
+  white-space: nowrap;
+}
+
+/* --- the rest of the board: a card each ---------------------------------- */
+
+.list {
+  list-style: none;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  margin-bottom: clamp(36px, 5vw, 60px);
+}
+
+@media (min-width: 900px) {
+  .list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+}
+
+.card {
+  display: grid;
+  grid-template-columns: auto 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0 14px;
+  padding: 16px 18px 0;
+  overflow: hidden;
+  transition:
+    transform 0.35s var(--ease),
+    border-color 0.35s var(--ease),
+    box-shadow 0.35s var(--ease);
+}
+
+/* a gold edge that grows down the left side under the pointer */
+.card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(180deg, var(--gold-bright), var(--gold-deep));
+  transform: scaleY(0);
+  transform-origin: top;
+  transition: transform 0.45s var(--ease);
+}
+
+/* and a soft light that crosses the card once */
+.card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 38%, rgba(236, 202, 119, 0.07) 50%, transparent 62%);
+  transform: translateX(-100%);
+  pointer-events: none;
+}
+
+@media (hover: hover) {
+  .card:hover {
+    transform: translateY(-3px);
+    border-color: var(--line-gold);
+    box-shadow:
+      inset 0 1px 0 rgba(236, 202, 119, 0.08),
+      0 22px 40px -26px rgba(0, 0, 0, 0.9),
+      0 0 44px -22px var(--gold-glow);
+  }
+  .card:hover::before {
+    transform: scaleY(1);
+  }
+  .card:hover::after {
+    transform: translateX(100%);
+    transition: transform 0.9s var(--ease);
+  }
+  .card:hover .cardRank {
+    color: var(--gold-bright);
+  }
+  .card:hover .avatar {
+    border-color: var(--gold);
+    box-shadow: 0 0 0 3px var(--bg), 0 0 0 4px var(--line-gold), 0 0 22px -4px var(--gold-glow);
+  }
+}
+
+.cardRank {
+  min-width: 2.2ch;
+  font-family: var(--f-display);
+  font-size: 1.55rem;
+  line-height: 1;
+  color: var(--gold-deep);
+  font-variant-numeric: tabular-nums lining-nums;
+  transition: color 0.35s var(--ease);
+}
+
 .avatar {
-  width: 30px;
-  height: 30px;
+  display: inline-block;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   border: 1px solid var(--line-gold);
-  background: var(--bg-2);
   object-fit: cover;
+  background: var(--raised);
+  box-shadow: 0 0 0 3px var(--bg), 0 0 0 4px var(--line);
+  transition:
+    border-color 0.35s var(--ease),
+    box-shadow 0.35s var(--ease);
 }
 
 .name {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
+  min-width: 0;
+  font-family: var(--f-serif);
+  font-size: 1.15rem;
   color: var(--ink);
+}
+
+.nameText {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -66,55 +567,176 @@
 }
 
 .tag {
+  flex-shrink: 0;
+  padding: 2px 7px;
+  font-family: var(--f-sans);
   font-size: 9px;
   font-weight: 700;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  padding: 2px 6px;
-  border-radius: 999px;
   color: #1a1409;
-  background: var(--gold-bright);
+  background: linear-gradient(180deg, var(--gold-bright), var(--gold));
+  border-radius: 999px;
 }
 
-.streak {
+.cardStreak {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.cardStreak b {
+  font-family: var(--f-display);
+  font-size: 1.6rem;
+  font-weight: 500;
+  line-height: 1;
+  background: linear-gradient(180deg, #fbeec6 10%, var(--gold-bright) 50%, var(--gold-deep));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.cardStreak small {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+/* the five figures, along the foot of the card */
+.strip {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 14px -18px 0;
+  border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg-2) 70%, transparent);
+}
+
+.strip > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 4px;
+}
+
+.strip > div + div {
+  border-left: 1px solid var(--line);
+}
+
+.strip dt {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-family: var(--f-mono);
-  font-size: 15px;
+  gap: 4px;
+  font-size: 8.5px;
   font-weight: 600;
-  color: var(--gold-bright);
-  font-variant-numeric: tabular-nums;
-}
-
-.flame {
-  color: var(--bad-bright);
-}
-
-.extra {
-  grid-column: 3 / -1;
-  font-family: var(--f-mono);
-  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
   color: var(--ink-faint);
 }
 
-.empty {
-  margin-top: 18px;
-  font-size: 13px;
-  color: var(--ink-mute);
-  text-align: center;
+.strip dt svg {
+  color: var(--gold-deep);
+  flex-shrink: 0;
 }
 
-.empty a {
-  color: var(--gold-bright);
+.strip dd {
+  font-family: var(--f-mono);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
 }
 
-@media (min-width: 560px) {
-  .row {
-    grid-template-columns: 3ch 32px 1fr auto auto;
+/* the signed-in player, wherever they stand */
+.mine {
+  border-color: var(--gold-deep);
+  box-shadow:
+    inset 0 1px 0 rgba(236, 202, 119, 0.08),
+    0 0 0 1px rgba(138, 108, 48, 0.3),
+    0 0 44px -18px var(--gold-glow);
+}
+
+/* --- phones -------------------------------------------------------------- */
+
+@media (max-width: 560px) {
+  .card {
+    grid-template-columns: auto 38px minmax(0, 1fr) auto;
+    gap: 0 10px;
+    padding: 14px 14px 0;
   }
-  .extra {
+  .strip {
+    margin-inline: -14px;
+  }
+  .avatar {
+    width: 38px;
+    height: 38px;
+  }
+  .cardRank {
+    font-size: 1.25rem;
+  }
+  .cardStreak small,
+  .strip dt svg {
+    display: none;
+  }
+  .standing {
+    justify-content: space-between;
+  }
+  /* the three seats: shorter, so the rest of the board is not a long way
+     down. The five figures go in one row and the per-game line is left out. */
+  .podium {
+    --lift: 46px;
+    gap: calc(var(--lift) + 26px) 0;
+    /* keeps the crown clear of the banner's rule */
+    margin-top: 16px;
+  }
+  .seat {
+    padding-inline: 14px;
+    padding-bottom: 16px;
+  }
+  .medal,
+  .seat1 .medal {
+    width: 84px;
+    height: 84px;
+    margin-top: calc(-1 * var(--lift));
+    margin-bottom: 10px;
+  }
+  .streak {
+    margin-top: 8px;
+  }
+  .deeds {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    margin-top: 14px;
+  }
+  .deeds > div,
+  .deeds > div:nth-child(n + 4) {
     grid-column: auto;
-    text-align: right;
+    padding: 9px 2px;
+  }
+  .deeds dt {
+    font-size: 8.5px;
+    letter-spacing: 0.1em;
+  }
+  .deeds dt svg,
+  .games {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orbit {
+    animation: none;
+  }
+  .seat:not(.vacant):hover,
+  .card:hover {
+    transform: none;
+  }
+  .card::after {
+    display: none;
   }
 }

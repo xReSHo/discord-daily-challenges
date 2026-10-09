@@ -1,0 +1,838 @@
+/* What a player wears: a figure in a niche with three slots to either side,
+   each framed in the colour of its piece's rarity; then what it adds up to;
+   then the armoury, a table of every piece there is. */
+
+.equipment {
+  margin-bottom: 40px;
+  scroll-margin-top: 96px;
+}
+
+/* one colour per rarity, kept muted so they sit in the dark-and-gold page */
+.common {
+  --rc: #9a917f;
+  --rc-glow: rgba(154, 145, 127, 0.16);
+}
+.uncommon {
+  --rc: #8fae6b;
+  --rc-glow: rgba(143, 174, 107, 0.2);
+}
+.rare {
+  --rc: #6f9bc4;
+  --rc-glow: rgba(111, 155, 196, 0.24);
+}
+.epic {
+  --rc: #a47cc9;
+  --rc-glow: rgba(164, 124, 201, 0.26);
+}
+.legendary {
+  --rc: #ecca77;
+  --rc-glow: rgba(236, 202, 119, 0.34);
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--f-display);
+  font-size: 1.05rem;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--gold-bright);
+}
+
+.title svg {
+  color: var(--gold);
+}
+
+.how {
+  font-size: 11.5px;
+  color: var(--ink-mute);
+}
+
+.sample {
+  padding: 3px 8px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold-bright);
+  border: 1px solid var(--line-gold);
+  border-radius: 999px;
+}
+
+/* ---------- the figure and its slots ---------- */
+
+.doll {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(200px, 22%, 300px) minmax(0, 1fr);
+  align-items: stretch;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background:
+    radial-gradient(46% 80% at 50% 46%, rgba(236, 202, 119, 0.07), transparent 70%),
+    linear-gradient(180deg, var(--panel), var(--panel-2)), var(--bg);
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.figure {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 360px;
+  padding: 18px 12px 12px;
+  border: 1px solid var(--line-gold);
+  /* an arched niche */
+  border-radius: 999px 999px var(--r) var(--r) / 150px 150px var(--r) var(--r);
+  background:
+    radial-gradient(70% 46% at 50% 34%, rgba(236, 202, 119, 0.16), transparent 72%),
+    linear-gradient(180deg, #14100b, #0b0906);
+  box-shadow: inset 0 0 60px -20px #000;
+  overflow: hidden;
+}
+
+.figureArt {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  max-height: 330px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 26px rgba(236, 202, 119, 0.16));
+}
+
+.knight {
+  flex: 1;
+  width: auto;
+  height: 100%;
+  min-height: 0;
+  max-height: 330px;
+  filter: drop-shadow(0 0 22px rgba(236, 202, 119, 0.14));
+}
+
+.figureCount {
+  margin-top: 8px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.figureCount b {
+  font-family: var(--f-display);
+  font-size: 1.05rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--gold-bright);
+}
+
+.slot {
+  display: grid;
+  grid-template-columns: 84px 1fr;
+  align-items: center;
+  gap: 14px;
+  flex: 1 0 auto;
+  min-height: 106px;
+  padding: 10px 14px 10px 10px;
+  border: 1px solid color-mix(in srgb, var(--rc) 45%, var(--line));
+  border-radius: var(--r);
+  background:
+    linear-gradient(90deg, var(--rc-glow), transparent 55%),
+    linear-gradient(180deg, var(--panel), var(--panel-2)), var(--bg);
+  outline: none;
+  transition:
+    border-color 0.3s var(--ease),
+    box-shadow 0.3s var(--ease);
+}
+
+/* the left-hand slots are mirrored, so every piece sits next to the figure */
+.sideLeft .slot {
+  grid-template-columns: 1fr 84px;
+  padding: 10px 10px 10px 14px;
+  text-align: right;
+  background:
+    linear-gradient(270deg, var(--rc-glow), transparent 55%),
+    linear-gradient(180deg, var(--panel), var(--panel-2)), var(--bg);
+}
+
+.sideLeft .frame {
+  order: 2;
+}
+
+.sideLeft .slotName {
+  justify-content: flex-end;
+}
+
+.slot:hover,
+.slot:focus-visible {
+  border-color: var(--rc);
+  box-shadow: 0 0 40px -18px var(--rc-glow);
+}
+
+.slot.bare {
+  --rc: var(--line-2);
+  --rc-glow: transparent;
+  border-style: dashed;
+  border-color: var(--line-2);
+  background: rgba(11, 9, 6, 0.5);
+}
+
+.frame {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 84px;
+  height: 84px;
+  border: 1px solid color-mix(in srgb, var(--rc) 60%, var(--line));
+  border-radius: var(--r);
+  background:
+    radial-gradient(70% 70% at 50% 55%, var(--rc-glow), transparent 72%),
+    #0b0906;
+}
+
+.bare .frame {
+  border-style: dashed;
+  border-color: var(--line);
+  background: none;
+}
+
+/* an empty slot: a faint diamond where the piece will sit */
+.bare .frame::after {
+  content: "";
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--line-2);
+  transform: rotate(45deg);
+}
+
+.legendary .frame {
+  box-shadow: inset 0 0 22px -8px var(--rc-glow);
+}
+
+.frame img {
+  width: 84%;
+  height: 84%;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.7));
+  transition: transform 0.4s var(--ease);
+}
+
+.slot:hover .frame img,
+.slot:focus-visible .frame img {
+  transform: scale(1.08) rotate(-3deg);
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.slotName {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.slotName b {
+  font-weight: 700;
+  color: var(--rc);
+}
+
+.name {
+  margin-top: 4px;
+  font-family: var(--f-display);
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+}
+
+.stat {
+  margin-top: 2px;
+  font-family: var(--f-display);
+  font-size: 1rem;
+  color: var(--gold-bright);
+  font-variant-numeric: lining-nums;
+}
+
+.perk {
+  margin-top: 4px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--ink-mute);
+}
+
+.none {
+  margin-top: 4px;
+  font-family: var(--f-display);
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+
+.gives {
+  margin-top: 3px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--ink-mute);
+}
+
+/* ---------- what it all adds up to ---------- */
+
+.totals {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  margin: 10px 0 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: linear-gradient(180deg, var(--panel), var(--panel-2)), var(--bg);
+}
+
+.totals > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  padding: 10px 12px;
+  text-align: center;
+}
+
+.totals > div + div {
+  border-left: 1px solid var(--line);
+}
+
+.totals dt {
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.totals dd {
+  margin: 3px 0 0;
+  font-family: var(--f-display);
+  font-size: 1.15rem;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.totals .on dd {
+  color: var(--gold-bright);
+}
+
+.totals span {
+  font-size: 10.5px;
+  line-height: 1.35;
+  color: var(--ink-mute);
+}
+
+/* ---------- the armoury ---------- */
+
+.armoury {
+  margin-top: 26px;
+}
+
+.armHead {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.armHead h3 {
+  font-family: var(--f-display);
+  font-size: 0.95rem;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--gold-bright);
+}
+
+.armCount {
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+.armBar {
+  flex: 1;
+  min-width: 120px;
+  max-width: 320px;
+  height: 3px;
+  margin-left: auto;
+  background: var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.armBar i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--gold-deep), var(--gold-bright));
+}
+
+.armBody {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(260px, 30%, 380px);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.matrix {
+  display: grid;
+  grid-template-columns: 96px repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  align-content: start;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: linear-gradient(180deg, var(--panel), var(--panel-2)), var(--bg);
+}
+
+/* a row's cells sit straight in the table's own columns */
+.row {
+  display: contents;
+}
+
+.colHead {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding-bottom: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--rc);
+}
+
+.colHead i {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  background: var(--rc);
+  transform: rotate(45deg);
+}
+
+.rowHead {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  font-family: var(--f-display);
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  color: var(--ink-dim);
+}
+
+.rowHead small {
+  font-family: var(--f-sans);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.tile {
+  position: relative;
+  display: block;
+  height: 76px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: #0b0906;
+  cursor: pointer;
+  transition:
+    border-color 0.2s var(--ease),
+    box-shadow 0.2s var(--ease),
+    transform 0.2s var(--ease);
+}
+
+/* pinned to the box's own edges, so it can never be larger than the box */
+.tile img {
+  position: absolute;
+  inset: 7px;
+  width: calc(100% - 14px);
+  height: calc(100% - 14px);
+  object-fit: contain;
+  transition: filter 0.2s var(--ease);
+}
+
+.tile.have {
+  border-color: color-mix(in srgb, var(--rc) 55%, var(--line));
+  background:
+    radial-gradient(70% 70% at 50% 55%, var(--rc-glow), transparent 75%),
+    #0b0906;
+}
+
+/* not found yet: a sealed box. Its colour says how rare, and nothing more */
+.tile.lack {
+  background:
+    repeating-linear-gradient(135deg, transparent 0 7px, rgba(255, 255, 255, 0.012) 7px 8px),
+    #0b0906;
+}
+
+.unknown,
+.unknownBig {
+  display: grid;
+  place-items: center;
+  font-family: var(--f-display);
+  color: color-mix(in srgb, var(--rc) 55%, var(--ink-faint));
+  opacity: 0.55;
+}
+
+.unknown {
+  position: absolute;
+  inset: 0;
+  font-size: 1.5rem;
+  transition: opacity 0.2s var(--ease);
+}
+
+.tile.lack:hover .unknown,
+.tile.lack[aria-pressed="true"] .unknown {
+  opacity: 1;
+}
+
+.unknownBig {
+  position: absolute;
+  inset: 12%;
+  font-size: 4.2rem;
+  border: 1px dashed color-mix(in srgb, var(--rc) 40%, var(--line));
+  border-radius: var(--r);
+}
+
+.tile:hover {
+  border-color: var(--rc);
+  transform: translateY(-2px);
+}
+
+.tile:focus-visible {
+  outline: 1px solid var(--gold-bright);
+  outline-offset: 2px;
+}
+
+.tile[aria-pressed="true"] {
+  border-color: var(--rc);
+  box-shadow:
+    0 0 0 1px var(--rc),
+    0 0 22px -6px var(--rc);
+}
+
+.tile b {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  padding: 1px 5px;
+  font-size: 7.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #1a1409;
+  background: var(--rc);
+  border-radius: 999px;
+}
+
+/* the piece that is picked, shown large */
+.detail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 18px;
+  text-align: center;
+  border: 1px solid color-mix(in srgb, var(--rc) 50%, var(--line));
+  border-radius: var(--r);
+  background:
+    radial-gradient(80% 46% at 50% 22%, var(--rc-glow), transparent 75%),
+    linear-gradient(180deg, var(--panel), var(--panel-2)), var(--bg);
+  animation: detailIn 0.3s var(--ease) both;
+}
+
+@keyframes detailIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.detailArt {
+  position: relative;
+  flex: none;
+  width: min(190px, 60%);
+  aspect-ratio: 1;
+}
+
+.detailArt img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 12px 16px rgba(0, 0, 0, 0.7));
+}
+
+.detailText {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+}
+
+.detailKind {
+  margin-top: 10px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--rc);
+}
+
+.detail.lack .detailText strong {
+  color: var(--ink-mute);
+}
+
+.detailText strong {
+  margin-top: 4px;
+  font-family: var(--f-display);
+  font-size: 1.15rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+}
+
+.detailStat {
+  margin-top: 3px;
+  font-family: var(--f-display);
+  font-size: 1.05rem;
+  color: var(--gold-bright);
+  font-variant-numeric: lining-nums;
+}
+
+.detailText p {
+  margin: 8px 0 0;
+  max-width: 34ch;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-dim);
+}
+
+.detailState {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 4px 10px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+}
+
+.have .detailState {
+  color: var(--ok-bright);
+  border-color: color-mix(in srgb, var(--ok) 45%, transparent);
+}
+
+.detailText dl {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: 100%;
+  margin: auto 0 0;
+  padding-top: 14px;
+}
+
+.detailText dl > div {
+  padding: 8px 6px 0;
+  border-top: 1px solid var(--line);
+}
+
+.detailText dl > div + div {
+  border-left: 1px solid var(--line);
+}
+
+.detailText dt {
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.detailText dd {
+  margin: 3px 0 0;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--ink-dim);
+}
+
+/* ---------- narrower screens ---------- */
+
+@media (max-width: 1000px) {
+  /* the figure on top, the six slots in two columns under it */
+  .doll {
+    grid-template-columns: 1fr 1fr;
+  }
+  .figure {
+    grid-column: 1 / -1;
+    order: -1;
+    justify-self: center;
+    width: min(220px, 60%);
+    min-height: 250px;
+  }
+  .knight,
+  .figureArt {
+    max-height: 210px;
+  }
+  .armBody {
+    grid-template-columns: 1fr;
+  }
+  /* the picked piece sits above the table, so a tap shows its answer in view */
+  .detail {
+    order: -1;
+    flex-direction: row;
+    align-items: center;
+    gap: 14px;
+    padding: 12px;
+    text-align: left;
+  }
+  .detailArt {
+    flex: none;
+    width: 84px;
+  }
+  .unknownBig {
+    inset: 4%;
+    font-size: 2.2rem;
+  }
+  .detailText {
+    align-items: flex-start;
+  }
+  .detailKind {
+    margin-top: 0;
+  }
+  .detailText p {
+    margin-top: 5px;
+  }
+  .detailState {
+    margin-top: 8px;
+  }
+  .detailText dl {
+    padding-top: 10px;
+  }
+}
+
+@media (max-width: 640px) {
+  .doll {
+    grid-template-columns: 1fr;
+    padding: 12px;
+  }
+  /* one column: no need to mirror the left-hand slots */
+  .sideLeft .slot {
+    grid-template-columns: 84px 1fr;
+    padding: 10px 14px 10px 10px;
+    text-align: left;
+    background:
+      linear-gradient(90deg, var(--rc-glow), transparent 55%),
+      linear-gradient(180deg, var(--panel), var(--panel-2)), var(--bg);
+  }
+  .sideLeft .slot.bare {
+    background: rgba(11, 9, 6, 0.5);
+  }
+  .sideLeft .frame {
+    order: 0;
+  }
+  .sideLeft .slotName {
+    justify-content: flex-start;
+  }
+  .totals {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .totals > div:nth-child(4) {
+    border-left: 0;
+  }
+  .totals > div:nth-child(n + 4) {
+    border-top: 1px solid var(--line);
+  }
+  .matrix {
+    grid-template-columns: 60px repeat(5, minmax(0, 1fr));
+    gap: 5px;
+    padding: 10px 8px;
+  }
+  .colHead {
+    flex-direction: column;
+    gap: 4px;
+    font-size: 7px;
+    letter-spacing: 0.06em;
+  }
+  .rowHead {
+    font-size: 0.6rem;
+    letter-spacing: 0;
+  }
+  .rowHead small {
+    display: none;
+  }
+  .tile {
+    height: 54px;
+  }
+  .tile img {
+    inset: 4px;
+    width: calc(100% - 8px);
+    height: calc(100% - 8px);
+  }
+  .tile b {
+    left: 2px;
+    bottom: 2px;
+    padding: 0 3px;
+    font-size: 6.5px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .frame img,
+  .tile,
+  .detail {
+    transition: none;
+    animation: none;
+  }
+  .slot:hover .frame img,
+  .slot:focus-visible .frame img,
+  .tile:hover {
+    transform: none;
+  }
+}

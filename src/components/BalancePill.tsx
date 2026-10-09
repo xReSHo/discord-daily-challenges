@@ -1,15 +1,52 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Coins, Landmark, Wallet } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, ChevronDown, Coins, Landmark, Wallet } from "lucide-react";
 import styles from "./AppFrame.module.css";
 
 /** Short figure for the pill — "91.2K", "67.7T" — so a whale's balance can't
- *  blow out the header. The exact numbers live in the dropdown. */
+ *  blow out the header. The exact numbers live in the purse below it. */
 const compact = new Intl.NumberFormat("en", {
   notation: "compact",
   maximumFractionDigits: 1,
 });
+
+/** The same figure said aloud — "67.7 trillion" — for the head of the purse. */
+const spoken = new Intl.NumberFormat("en", {
+  notation: "compact",
+  compactDisplay: "long",
+  maximumFractionDigits: 1,
+});
+
+const exact = (n: number) => n.toLocaleString("en-US");
+
+/** A figure is only worth writing out twice once the short form hides digits. */
+const abridged = (n: number) => Math.abs(n) >= 10_000;
+
+function Share({
+  icon,
+  label,
+  value,
+  pct,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+  pct: number;
+}) {
+  return (
+    <div className={styles.purseShare}>
+      <span className={styles.purseLabel}>
+        {icon}
+        {label}
+      </span>
+      <b className={styles.purseValue}>{compact.format(value)}</b>
+      {abridged(value) && <span className={styles.purseExact}>{exact(value)}</span>}
+      <span className={styles.pursePct}>{pct < 1 && value > 0 ? "<1" : Math.round(pct)}%</span>
+    </div>
+  );
+}
 
 export function BalancePill({
   cash,
@@ -41,6 +78,10 @@ export function BalancePill({
     };
   }, [open]);
 
+  const held = Math.max(0, cash) + Math.max(0, bank);
+  const cashPct = held > 0 ? (Math.max(0, cash) / held) * 100 : 0;
+  const bankPct = held > 0 ? 100 - cashPct : 0;
+
   return (
     <div className={styles.balanceWrap} ref={wrapRef}>
       <button
@@ -48,32 +89,46 @@ export function BalancePill({
         className={styles.balance}
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        aria-label="Show coin balance"
+        aria-label={`Your coins: ${exact(total)}. Show the breakdown`}
       >
-        <Coins size={14} />
+        <span className={styles.balanceCoin} aria-hidden="true">
+          <Coins size={12} />
+        </span>
         <span className={styles.balanceNum}>{compact.format(total)}</span>
+        <ChevronDown size={12} className={styles.balanceCaret} aria-hidden="true" />
       </button>
 
       <div
         className={`${styles.balanceMenu} ${open ? styles.balanceMenuOpen : ""}`}
-        role="menu"
+        role="region"
+        aria-label="Your purse"
         aria-hidden={!open}
       >
-        <span className={styles.balanceRow}>
-          <Wallet size={13} />
-          <span>On hand</span>
-          <b>{cash.toLocaleString()}</b>
-        </span>
-        <span className={styles.balanceRow}>
-          <Landmark size={13} />
-          <span>Banked</span>
-          <b>{bank.toLocaleString()}</b>
-        </span>
-        <span className={`${styles.balanceRow} ${styles.balanceTotal}`}>
-          <Coins size={13} />
-          <span>Total</span>
-          <b>{total.toLocaleString()}</b>
-        </span>
+        <p className={styles.purseEyebrow}>Your purse</p>
+        <p className={styles.purseTotal}>
+          {abridged(total) ? spoken.format(total) : exact(total)}
+          <small>coins</small>
+        </p>
+        {abridged(total) && <p className={styles.purseTotalExact}>{exact(total)}</p>}
+
+        <div className={styles.purseBar} aria-hidden="true">
+          <i style={{ width: `${cashPct}%` }} />
+        </div>
+
+        <div className={styles.purseShares}>
+          <Share icon={<Wallet size={12} />} label="On hand" value={cash} pct={cashPct} />
+          <Share icon={<Landmark size={12} />} label="Banked" value={bank} pct={bankPct} />
+        </div>
+
+        <Link
+          href="/shop"
+          className={styles.purseLink}
+          tabIndex={open ? 0 : -1}
+          onClick={() => setOpen(false)}
+        >
+          Spend it at the shop
+          <ArrowRight size={13} />
+        </Link>
       </div>
     </div>
   );

@@ -62,61 +62,6 @@ export function grantRole(userId: string, roleId: string, reason: string): Promi
   return roleCall("PUT", userId, roleId, reason);
 }
 
-/**
- * DM a user as the bot — opens (or reuses) the 1:1 channel, then posts one
- * embed. Used to alert the owner when the site assistant's model call fails.
- * Only needs the bot token (not a guild), so it works even if `DISCORD_GUILD_ID`
- * is unset.
- */
-export async function dmUser(
-  userId: string,
-  msg: { title: string; description: string },
-): Promise<RoleResult> {
-  const token = process.env.DISCORD_BOT_TOKEN;
-  if (!token) return { ok: false, reason: "Discord bot token is not configured" };
-
-  const headers = {
-    Authorization: `Bot ${token}`,
-    "Content-Type": "application/json",
-  };
-
-  try {
-    const dm = await fetch(`${API}/users/@me/channels`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ recipient_id: userId }),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
-    if (!dm.ok) {
-      return { ok: false, reason: `Discord ${dm.status}: could not open a DM channel` };
-    }
-    const channel = (await dm.json()) as { id?: string };
-    if (!channel.id) return { ok: false, reason: "Discord: DM channel had no id" };
-
-    const sent = await fetch(`${API}/channels/${channel.id}/messages`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        embeds: [
-          {
-            title: msg.title.slice(0, 250),
-            description: msg.description.slice(0, 4000),
-            color: 0xbd5a3c,
-            timestamp: new Date().toISOString(),
-          },
-        ],
-      }),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
-    if (!sent.ok) {
-      return { ok: false, reason: `Discord ${sent.status}: message not delivered` };
-    }
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, reason: `Discord request failed: ${String(err)}` };
-  }
-}
-
 export function removeRole(userId: string, roleId: string, reason: string): Promise<RoleResult> {
   return roleCall("DELETE", userId, roleId, reason);
 }
@@ -124,4 +69,33 @@ export function removeRole(userId: string, roleId: string, reason: string): Prom
 /** Whether the bot token + guild are configured (shop can grant on the site). */
 export function discordConfigured(): boolean {
   return credentials() !== null;
+}
+
+/**
+ * Where a Discord avatar lives. Asking for `.png` gives a still picture even
+ * when the avatar is animated (a Nitro GIF), which is what the site shows:
+ * small, and nothing moving in a list of faces.
+ */
+export function avatarUrl(userId: string, hash: string): string {
+  return `https://cdn.discordapp.com/avatars/${userId}/${hash}.png?size=128`;
+}
+
+/**
+ * A user's avatar as it is right now: its address, null if they have none,
+ * or undefined if Discord couldn't be asked. Needs only the bot token.
+ */
+export async function currentAvatar(userId: string): Promise<string | null | undefined> {
+  const token = process.env.DISCORD_BOT_TOKEN;
+  if (!token || !/^\d{5,25}$/.test(userId)) return undefined;
+  try {
+    const res = await fetch(`${API}/users/${userId}`, {
+      headers: { Authorization: `Bot ${token}` },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    if (!res.ok) return undefined;
+    const user = (await res.json()) as { avatar?: string | null };
+    return user.avatar ? avatarUrl(userId, user.avatar) : null;
+  } catch {
+    return undefined;
+  }
 }

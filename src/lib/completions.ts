@@ -21,7 +21,12 @@ import { getChallengeDate } from "@/lib/challenge-date";
 import { isDevMode } from "@/lib/dev-mode";
 import { SECTIONS, SECTION_IDS, type SectionId } from "@/lib/sections";
 import { evaluateAchievements, getActiveBoostPercent } from "@/lib/achievements/engine";
-import { logger } from "@/lib/logger";
+import { getSectionReward } from "@/lib/section-status";
+import { ensureDayRequirement } from "@/lib/day-requirement";
+import { later } from "@/lib/background";
+import { rollTrialDrop } from "@/lib/equipment-drops";
+import { fortuneFor } from "@/lib/equipment";
+import { getGear } from "@/lib/equipment-effects";
 
 export type CompleteResult =
   | { status: "rewarded"; amount: number; newBalance: number }
@@ -44,16 +49,30 @@ export async function completeSection(
   const base =
     rewardAmount != null && Number.isFinite(rewardAmount)
       ? Math.max(0, Math.floor(rewardAmount))
-      : section.reward;
+      : await getSectionReward(sectionId);
   // A permanent achievement (e.g. "Unbroken Week") can boost every future
   // daily-trial reward by a fixed percent — never the boss bounty or
   // geodash's staked payout, which pay out through their own paths.
-  const boostPct = base > 0 ? await getActiveBoostPercent(discordId) : 0;
-  const reward = boostPct > 0 ? Math.floor(base * (1 + boostPct / 100)) : base;
   const date = getChallengeDate();
+  let boostPct = base > 0 ? await getActiveBoostPercent(discordId) : 0;
+  // The boots add their Fortune on top, the same way: a percent of the trial's
+  // own prize. The legendary pair doubles it on the day's first trial.
+  if (base > 0) {
+    const gear = await getGear(discordId);
+    if (gear.fortune > 0) {
+      const first =
+        gear.perks.includes("boots") &&
+        (await prisma.completion.count({ where: { discordId, date, rewarded: true } })) === 0;
+      boostPct += fortuneFor(gear, first);
+    }
+  }
+  const reward = boostPct > 0 ? Math.floor(base * (1 + boostPct / 100)) : base;
   const key = {
     discordId_section_date: { discordId, section: sectionId, date },
   };
+
+  // Pin down which games today requires before the first completion lands.
+  await ensureDayRequirement();
 
   // 1. Claim the slot.
   try {
@@ -92,9 +111,9 @@ export async function completeSection(
       where: key,
       data: { rewarded: true },
     });
-    evaluateAchievements(discordId).catch((err) =>
-      logger.error("achievements.eval_call_failed", { discordId, message: String(err) }),
-    );
+    later(() => evaluateAchievements(discordId));
+    // every finished trial is a chance at a piece of equipment (never throws)
+    await rollTrialDrop(discordId, sectionId, date);
     return { status: "rewarded", amount: reward, newBalance };
   } catch (err) {
     await prisma.completion.deleteMany({

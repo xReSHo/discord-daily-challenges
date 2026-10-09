@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Users, Swords, Timer } from "lucide-react";
 import type { BossState } from "@/lib/boss/types";
-import { AdminBar, BossPortrait, Leaderboard, fmtDuration } from "../shared";
+import { THREADS, keepsThread, threadsMult } from "@/lib/boss/mechanics/combo";
+import { BossPortrait, ComboBand, Stage } from "../shared";
 import { MiniTyping } from "./MiniTyping";
 import { MiniAim } from "./MiniAim";
 import { MiniLitany } from "./MiniLitany";
@@ -19,7 +19,7 @@ type Session = {
   config: Record<string, number>;
 };
 type Result =
-  | { ok: true; dmg: number; metric: number; game: Game }
+  | { ok: true; dmg: number; mult: number; metric: number; game: Game }
   | { ok: false; reason: string };
 
 const CARDS: { game: Game; title: string; blurb: string }[] = [
@@ -132,7 +132,7 @@ export function MiniArena({ initial }: { initial: BossState }) {
       if (data.state) setServer(data.state as BossState);
       setResult(
         data.ok
-          ? { ok: true, dmg: data.dmg, metric: data.metric, game: s.game }
+          ? { ok: true, dmg: data.dmg, mult: data.mult ?? 1, metric: data.metric, game: s.game }
           : { ok: false, reason: data.reason ?? "The trial slipped away." },
       );
     } catch {
@@ -144,8 +144,11 @@ export function MiniArena({ initial }: { initial: BossState }) {
 
   const cancel = useCallback(() => setSession(null), []);
 
-  const hpPct = Math.max(0, Math.min(100, (server.hp / server.maxHp) * 100));
   const expiresIn = Date.parse(server.expiresAt) - now;
+
+  // the thread: trials passed in a row, none of them one of the last two
+  const thread = server.combo?.kind === "threads" ? server.combo : { chain: 0, recent: [] };
+  const lastTitle = (g: string) => CARDS.find((c) => c.game === g)?.title ?? g;
 
   // ---------- a trial in progress ----------
   if (session) {
@@ -184,70 +187,29 @@ export function MiniArena({ initial }: { initial: BossState }) {
     }
 
     return (
-      <div className={styles.card}>
-        <h1 className={styles.name}>{server.name}</h1>
-        <div className={styles.hpWrap}>
-          <div className={styles.hpBar}>
-            <div
-              className={styles.hpFill}
-              style={{ width: `${hpPct}%` }}
-              data-low={hpPct < 25 || undefined}
-            />
-          </div>
-          <div className={styles.hpText}>
-            <span className="mono">
-              {Math.ceil(server.hp).toLocaleString()} /{" "}
-              {server.maxHp.toLocaleString()}
-            </span>
-            <span className="mono">{Math.round(hpPct)}%</span>
-          </div>
-        </div>
-        {surface}
-      </div>
+      <Stage
+        state={server}
+        eyebrow="The Weekly Raid — a trial is open"
+        hp={server.hp}
+        mine={server.yourDamage}
+        clock={{ label: "Ends in", ms: expiresIn }}
+        focus
+      >
+        <div className={styles.miniPanel}>{surface}</div>
+      </Stage>
     );
   }
 
   // ---------- the reliquary (menu) ----------
   return (
-    <div className={styles.card}>
-      <p className="eyebrow">
-        {server.adminOnly
-          ? "Test Raid — admins only"
-          : "The Weekly Raid — fight now"}
-      </p>
-      <h1 className={styles.name}>{server.name}</h1>
-      {(server.adminOnly || !server.paysOut) && (
-        <p className={styles.testFlag}>
-          {server.adminOnly && "Only admins can see this fight. "}
-          {!server.paysOut && "No coins are paid out for it."}
-        </p>
-      )}
-      <AdminBar show={server.viewerIsAdmin} active />
-
-      <div className={styles.hpWrap}>
-        <div className={styles.hpBar}>
-          <div
-            className={styles.hpFill}
-            style={{ width: `${hpPct}%` }}
-            data-low={hpPct < 25 || undefined}
-          />
-        </div>
-        <div className={styles.hpText}>
-          <span className="mono">
-            {Math.ceil(server.hp).toLocaleString()} /{" "}
-            {server.maxHp.toLocaleString()}
-          </span>
-          <span className="mono">{Math.round(hpPct)}%</span>
-        </div>
-      </div>
-
-      <BossPortrait image={server.image} name={server.name} dimmed />
-
-      <p className={styles.sub}>
-        {server.blurb ||
-          "Undo him through the reliquary trials. Harder trials tear deeper."}
-      </p>
-
+    <Stage
+      state={server}
+      eyebrow={server.adminOnly ? "Test Raid — admins only" : "The Weekly Raid — fight now"}
+      hp={server.hp}
+      mine={server.yourDamage}
+      clock={{ label: "Ends in", ms: expiresIn }}
+      notice={
+        <>
       {result && (
         <p
           className={`${styles.miniResult} ${
@@ -256,25 +218,59 @@ export function MiniArena({ initial }: { initial: BossState }) {
         >
           {result.ok
             ? `${METRIC_LABEL[result.game](result.metric)} — ${
-                result.dmg > 0 ? `tore ${result.dmg} from him` : "no damage that time"
+                result.dmg > 0
+                  ? `tore ${result.dmg} from him${result.mult > 1 ? ` (×${result.mult} thread)` : ""}`
+                  : "no damage that time"
               }.`
             : result.reason}
         </p>
       )}
 
+      <ComboBand
+        tone="threads"
+        label={
+          <>
+            <b>{thread.chain}</b> thread{thread.chain === 1 ? "" : "s"}
+          </>
+        }
+        pips={{ lit: thread.chain, of: THREADS.max }}
+        mult={threadsMult(thread.chain)}
+        note="next trial"
+        live={thread.chain > 0}
+        peak={thread.chain >= THREADS.max}
+        hint={
+          thread.recent.length === 0 ? (
+            <>Pass a trial to pull the first thread. Never repeat either of your last two.</>
+          ) : (
+            <>
+              Your last two: <b>{thread.recent.map(lastTitle).join(", ")}</b>. Repeat one, or fail,
+              and the thread is cut.
+            </>
+          )
+        }
+      />
+
       <div className={styles.miniCards}>
-        {CARDS.map((c) => (
-          <button
-            key={c.game}
-            type="button"
-            className={styles.miniCard}
-            disabled={busy || cooling}
-            onClick={() => start(c.game)}
-          >
-            <span className={styles.miniCardTitle}>{c.title}</span>
-            <span className={styles.miniCardBlurb}>{c.blurb}</span>
-          </button>
-        ))}
+        {CARDS.map((c) => {
+          const keeps = keepsThread(thread.recent, c.game);
+          return (
+            <button
+              key={c.game}
+              type="button"
+              className={`${styles.miniCard} ${keeps ? "" : styles.miniCardCut}`}
+              disabled={busy || cooling}
+              onClick={() => start(c.game)}
+            >
+              <span className={styles.miniCardTitle}>{c.title}</span>
+              <span className={styles.miniCardBlurb}>{c.blurb}</span>
+              {thread.recent.length > 0 && (
+                <span className={styles.miniCardNote}>
+                  {keeps ? "keeps the thread" : "cuts the thread"}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {cooling && (
@@ -282,26 +278,10 @@ export function MiniArena({ initial }: { initial: BossState }) {
           Next trial in {Math.max(0, Math.ceil((cd - now) / 1000))}s
         </p>
       )}
-
-      <div className={styles.stats}>
-        <span className="rune">
-          <Swords size={14} /> {Math.round(server.yourDamage).toLocaleString()}
-        </span>
-        <span className="rune">
-          <Users size={14} /> {server.participants}
-        </span>
-        <span className="rune">
-          <Timer size={14} /> {fmtDuration(expiresIn)}
-        </span>
-      </div>
-
-      <p className={styles.sub}>
-        Bounty pool {server.rewardPool.toLocaleString()} coins, split by damage.
-        Everyone who fights and loses forfeits{" "}
-        {server.penaltyEach.toLocaleString()}.
-      </p>
-
-      <Leaderboard top={server.top} />
-    </div>
+        </>
+      }
+    >
+      <BossPortrait image={server.image} name={server.name} dimmed />
+    </Stage>
   );
 }

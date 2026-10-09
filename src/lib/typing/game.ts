@@ -26,7 +26,7 @@ import {
 import { getAttempt, recordFail } from "@/lib/attempts";
 import { flagAttempt } from "@/lib/audit";
 import { recordScore } from "@/lib/scores";
-import { SECTIONS } from "@/lib/sections";
+import { getSectionReward, getSectionTries } from "@/lib/section-status";
 import { getDailyParagraph } from "./daily";
 
 const SECTION = "typing" as const;
@@ -39,19 +39,26 @@ export const MAX_STRIKES = Math.max(1, Number(process.env.TYPING_MAX_STRIKES) ||
 const MIN_DURATION_MS = 4000;
 const MIN_COMPLETION = 0.85; // must type at least this fraction of the paragraph
 
-/** Full prize before any drop. */
-const BASE_PRIZE = SECTIONS.typing.reward;
-/** Losing runs 1..FREE_FAILS don't touch the prize. */
-export const FREE_FAILS = Math.max(0, Number(process.env.TYPING_FREE_FAILS) || 6);
-/** Each fail past FREE_FAILS drops the prize by this. */
+/** Full prize before any drop — the live reward set in /admin/games. */
+export function typingBasePrize(): Promise<number> {
+  return getSectionReward(SECTION);
+}
+
+/** Losing runs that don't touch the prize — live, set in /admin/games. */
+export function typingFreeFails(): Promise<number> {
+  return getSectionTries(SECTION);
+}
+/** Each fail past the free ones drops the prize by this. */
 export const FAIL_DROP = Math.max(1, Number(process.env.TYPING_FAIL_DROP) || 100);
 /** Fail count at which the day is locked (prize would be 0). */
-export const LOCK_AT = FREE_FAILS + Math.ceil(BASE_PRIZE / FAIL_DROP);
+export function lockAt(basePrize: number, freeFails: number): number {
+  return freeFails + Math.ceil(basePrize / FAIL_DROP);
+}
 
 /** The day's prize given how many losing runs have already happened. */
-export function prizeFor(fails: number): number {
-  const dropped = BASE_PRIZE - FAIL_DROP * Math.max(0, fails - FREE_FAILS);
-  return Math.max(0, Math.min(BASE_PRIZE, dropped));
+export function prizeFor(fails: number, basePrize: number, freeFails: number): number {
+  const dropped = basePrize - FAIL_DROP * Math.max(0, fails - freeFails);
+  return Math.max(0, Math.min(basePrize, dropped));
 }
 
 export type StartResult = {
@@ -64,10 +71,12 @@ export type StartResult = {
 };
 
 export async function startTest(discordId: string): Promise<StartResult> {
-  const [text, completed, attempt] = await Promise.all([
+  const [text, completed, attempt, base, free] = await Promise.all([
     getDailyParagraph(),
     getCompletedSectionsToday(discordId),
     getAttempt(discordId, SECTION),
+    typingBasePrize(),
+    typingFreeFails(),
   ]);
   const token = signToken({ d: discordId, day: getChallengeDateString(), s: SECTION });
   return {
@@ -76,7 +85,7 @@ export async function startTest(discordId: string): Promise<StartResult> {
     alreadyCompleted: completed.has(SECTION),
     failed: attempt.failed,
     fails: attempt.fails,
-    prize: prizeFor(attempt.fails),
+    prize: prizeFor(attempt.fails, base, free),
   };
 }
 
@@ -129,7 +138,11 @@ export async function submitTest(
 
   // From here it's a genuine attempt. A locked day rejects it outright; any
   // other non-ok result counts as a losing run.
-  const before = await getAttempt(discordId, SECTION);
+  const [before, base, free] = await Promise.all([
+    getAttempt(discordId, SECTION),
+    typingBasePrize(),
+    typingFreeFails(),
+  ]);
   if (before.failed) {
     return {
       ok: false,
@@ -142,13 +155,13 @@ export async function submitTest(
   }
 
   async function lose(reason: string, extra: { wpm?: number; accuracy?: number } = {}) {
-    const after = await recordFail(discordId, SECTION, { lockAt: LOCK_AT });
+    const after = await recordFail(discordId, SECTION, { lockAt: lockAt(base, free) });
     return {
       ok: false as const,
       reason,
       ...extra,
       fails: after.fails,
-      prize: prizeFor(after.fails),
+      prize: prizeFor(after.fails, base, free),
       failed: after.failed,
     };
   }
@@ -228,8 +241,8 @@ export async function submitTest(
     });
   }
 
-  const prize = prizeFor(before.fails);
+  const prize = prizeFor(before.fails, base, free);
+  await recordScore(discordId, SECTION, "wpm", Math.round(netWpm));
   const reward = await completeSection(discordId, SECTION, prize);
-  recordScore(discordId, SECTION, "wpm", Math.round(netWpm));
   return { ok: true, wpm: Math.round(netWpm), accuracy, reward };
 }

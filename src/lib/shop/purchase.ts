@@ -15,7 +15,10 @@ import { prisma } from "@/lib/prisma";
 import { spend, refund } from "@/lib/unbelievaboat";
 import { grantRole } from "@/lib/discord";
 import { logger } from "@/lib/logger";
+import { evaluateAchievements } from "@/lib/achievements/engine";
+import { later } from "@/lib/background";
 import { getWebsiteShopItem, isAvailable } from "@/lib/shop/website-items";
+import { getShopSettings } from "@/lib/site-settings";
 
 /** Purchase rows that count as "this item is spoken for". */
 export const LIVE_PURCHASE_STATUSES = ["charging", "fulfilled"];
@@ -46,7 +49,14 @@ export async function buyWebsiteItem(
     };
   }
 
-  const item = getWebsiteShopItem(itemId);
+  const settings = await getShopSettings();
+  if (!settings.open) {
+    return { ok: false, code: 503, error: settings.note || "The shop is closed right now." };
+  }
+
+  // Read fresh, and snapshot: the price charged is the price on this row, even
+  // if an admin edits the item while the purchase is in flight.
+  const item = await getWebsiteShopItem(itemId);
   if (!item || !item.effect.roleId || !isAvailable(item)) {
     return { ok: false, code: 404, error: "That item isn't available." };
   }
@@ -140,6 +150,7 @@ export async function buyWebsiteItem(
     },
   });
   logger.info("shop.purchase", { discordId, itemId, price: item.price });
+  later(() => evaluateAchievements(discordId)); // "buy from the shop" achievements
 
   return { ok: true, newBalance: charged.balance.total };
 }

@@ -26,6 +26,8 @@ import { flagAttempt } from "@/lib/audit";
 import { recordScore } from "@/lib/scores";
 import { isDevMode } from "@/lib/dev-mode";
 import { logger } from "@/lib/logger";
+import { getGeodashEconomy, type GeodashEconomy } from "@/lib/site-settings";
+import { getSectionTries } from "@/lib/section-status";
 import { isDifficulty, type Difficulty } from "./daily";
 import { getDailyCourse } from "./courses";
 import { simulate, expectedRunMs, type Course } from "./physics";
@@ -37,29 +39,26 @@ function envInt(name: string, dflt: number): number {
   return Number.isFinite(n) && n >= 0 ? Math.floor(n) : dflt;
 }
 
-const ENTRY = envInt("GEODASH_ENTRY", 100);
-const REWARD: Record<"easy" | "medium" | "hard", number> = {
-  easy: envInt("GEODASH_EASY_REWARD", 100),
-  medium: envInt("GEODASH_MEDIUM_REWARD", 300),
-  hard: envInt("GEODASH_HARD_REWARD", 500),
-};
-const IMPOSSIBLE_MIN = envInt("GEODASH_IMPOSSIBLE_MIN", 5000);
-const IMPOSSIBLE_MULT = 5;
+// Entry fee, per-difficulty rewards and the Impossible stake rules are live
+// settings (src/lib/site-settings.ts), edited from /admin/games.
 /** 0 = uncapped (honours "no maximum" for impossible). */
 const MAX_PAYOUT = envInt("GEODASH_MAX_PAYOUT", 0);
 const TTL_MS = envInt("GEODASH_RUN_TTL_MIN", 20) * 60_000;
-/** free restarts per fee before the player must pay again to keep going */
-const MAX_RESTARTS = envInt("GEODASH_MAX_RESTARTS", 5);
-
-function costFor(difficulty: Difficulty, stake: number): number {
-  return difficulty === "impossible" ? stake : ENTRY;
+/** Free restarts per fee before the player must pay again to keep going —
+ *  live, set in /admin/games. */
+function freeRestarts(): Promise<number> {
+  return getSectionTries(SECTION);
 }
 
-function payoutFor(difficulty: Difficulty, stake: number): number {
+function costFor(eco: GeodashEconomy, difficulty: Difficulty, stake: number): number {
+  return difficulty === "impossible" ? stake : eco.entry;
+}
+
+function payoutFor(eco: GeodashEconomy, difficulty: Difficulty, stake: number): number {
   const raw =
     difficulty === "impossible"
-      ? stake * IMPOSSIBLE_MULT
-      : stake + REWARD[difficulty];
+      ? stake * eco.impossibleMult
+      : stake + eco.rewards[difficulty];
   return MAX_PAYOUT > 0 ? Math.min(raw, MAX_PAYOUT) : raw;
 }
 
@@ -143,14 +142,18 @@ async function expireRun(row: GeoRunRow): Promise<void> {
 }
 
 async function baseState(discordId: string, devMode: boolean): Promise<Omit<GeoState, "run">> {
-  const b = await getBalance(discordId);
+  const [b, eco, maxRestarts] = await Promise.all([
+    getBalance(discordId),
+    getGeodashEconomy(),
+    freeRestarts(),
+  ]);
   return {
     section: SECTION,
-    entry: ENTRY,
-    impossibleMin: IMPOSSIBLE_MIN,
-    multiplier: IMPOSSIBLE_MULT,
-    maxRestarts: MAX_RESTARTS,
-    rewards: REWARD,
+    entry: eco.entry,
+    impossibleMin: eco.impossibleMin,
+    multiplier: eco.impossibleMult,
+    maxRestarts,
+    rewards: eco.rewards,
     devMode,
     balance: b ? { cash: b.cash, bank: b.bank, total: b.total } : null,
   };
@@ -159,6 +162,7 @@ async function baseState(discordId: string, devMode: boolean): Promise<Omit<GeoS
 export async function getGeoState(discordId: string): Promise<GeoState> {
   const devMode = await isDevMode(discordId);
   const base = await baseState(discordId, devMode);
+  const { maxRestarts } = base;
   if (devMode) return { ...base, run: { status: "none" } };
 
   const row = (await prisma.geoRun.findUnique({
@@ -180,7 +184,7 @@ export async function getGeoState(discordId: string): Promise<GeoState> {
         status: "open",
         difficulty,
         stake: row.stake,
-        restartsLeft: Math.max(0, MAX_RESTARTS - row.restarts),
+        restartsLeft: Math.max(0, maxRestarts - row.restarts),
         deaths: row.deaths,
       },
     };
@@ -241,6 +245,7 @@ export async function startCourse(
 ): Promise<StartResult> {
   if (!isDifficulty(input.difficulty)) return { ok: false, error: "bad_difficulty" };
   const difficulty = input.difficulty;
+  const [eco, maxRestarts] = await Promise.all([getGeodashEconomy(), freeRestarts()]);
   const day = getChallengeDateString();
   const date = getChallengeDate();
 
@@ -254,10 +259,10 @@ export async function startCourse(
       token: issue(Date.now(), true),
       course,
       difficulty,
-      stake: difficulty === "impossible" ? IMPOSSIBLE_MIN : ENTRY,
+      stake: difficulty === "impossible" ? eco.impossibleMin : eco.entry,
       devMode: true,
       kind: "fresh",
-      restartsLeft: MAX_RESTARTS,
+      restartsLeft: maxRestarts,
     };
   }
 
@@ -297,7 +302,7 @@ export async function startCourse(
         stake: existing.stake,
         devMode: false,
         kind: existing.deaths === 0 ? "resume" : "restart",
-        restartsLeft: Math.max(0, MAX_RESTARTS - existing.restarts),
+        restartsLeft: Math.max(0, maxRestarts - existing.restarts),
       };
     }
   }
@@ -315,19 +320,19 @@ export async function startCourse(
   let stake: number;
   if (difficulty === "impossible") {
     const s = Number(input.stake);
-    if (!Number.isInteger(s) || s < IMPOSSIBLE_MIN) {
+    if (!Number.isInteger(s) || s < eco.impossibleMin) {
       return {
         ok: false,
         error: "bad_stake",
-        message: `The minimum stake for Impossible is ${IMPOSSIBLE_MIN.toLocaleString()}.`,
+        message: `The minimum stake for Impossible is ${eco.impossibleMin.toLocaleString()}.`,
       };
     }
     stake = s;
   } else {
-    stake = ENTRY;
+    stake = eco.entry;
   }
 
-  const cost = costFor(difficulty, stake);
+  const cost = costFor(eco, difficulty, stake);
   const reason = repaying
     ? `Geometry Dash — ${difficulty} continue`
     : `Geometry Dash — ${difficulty} entry`;
@@ -400,7 +405,7 @@ export async function startCourse(
     stake: cost,
     devMode: false,
     kind: repaying ? "repay" : "fresh",
-    restartsLeft: MAX_RESTARTS,
+    restartsLeft: maxRestarts,
   };
 }
 
@@ -455,6 +460,7 @@ export async function submitCourse(
     return { ok: false, outcome: "error", reason: "Malformed run data." };
   }
 
+  const [eco, maxRestarts] = await Promise.all([getGeodashEconomy(), freeRestarts()]);
   const course = await getDailyCourse(difficulty);
   const sim = simulate(course, jumpTimes);
   const windowMs = Date.now() - payload.iat;
@@ -463,11 +469,11 @@ export async function submitCourse(
   // dev mode: report the outcome, record nothing, move no coins.
   if (payload.dev || (await isDevMode(discordId))) {
     if (sim.reachedEnd) {
-      const nominal = difficulty === "impossible" ? IMPOSSIBLE_MIN : ENTRY;
+      const nominal = difficulty === "impossible" ? eco.impossibleMin : eco.entry;
       return {
         ok: true,
         outcome: "won",
-        payout: payoutFor(difficulty, nominal),
+        payout: payoutFor(eco, difficulty, nominal),
         newBalance: null,
         devMode: true,
       };
@@ -476,7 +482,7 @@ export async function submitCourse(
       ok: false,
       outcome: "down",
       distancePct: sim.distancePct,
-      restartsLeft: MAX_RESTARTS,
+      restartsLeft: maxRestarts,
       devMode: true,
     };
   }
@@ -579,7 +585,7 @@ export async function submitCourse(
       });
     }
 
-    const payout = payoutFor(difficulty, row.stake);
+    const payout = payoutFor(eco, difficulty, row.stake);
     const claim = await prisma.geoRun.updateMany({
       where: { id: row.id, status: "open" },
       data: { status: "won", payout, distancePct: 100, resolvedAt: new Date() },
@@ -603,13 +609,13 @@ export async function submitCourse(
     } catch (err) {
       logger.error("geodash.payout_failed", { discordId, payout, message: String(err) });
     }
+    await recordScore(discordId, SECTION, "geoPercent", 100);
     await completeSection(discordId, SECTION, 0);
-    recordScore(discordId, SECTION, "geoPercent", 100);
     return { ok: true, outcome: "won", payout, newBalance, devMode: false };
   }
 
   // --- death ----------------------------------------------------------
-  recordScore(discordId, SECTION, "geoPercent", sim.distancePct);
+  await recordScore(discordId, SECTION, "geoPercent", sim.distancePct);
 
   // A replay that dies within a hair of the finish, while the wall-clock and
   // reported time both look like a full clear, is the signature of a
@@ -631,7 +637,7 @@ export async function submitCourse(
     });
   }
 
-  if (row.restarts < MAX_RESTARTS) {
+  if (row.restarts < maxRestarts) {
     // a free restart is left — keep the run open but null the token (`tokenIat`
     // 0 matches nothing) so this attempt can't be re-submitted; the client must
     // call /start to get a fresh token.
@@ -663,7 +669,7 @@ export async function submitCourse(
       ok: false,
       outcome: "down",
       distancePct: sim.distancePct,
-      restartsLeft: Math.max(0, MAX_RESTARTS - (row.restarts + 1)),
+      restartsLeft: Math.max(0, maxRestarts - (row.restarts + 1)),
       devMode: false,
     };
   }
