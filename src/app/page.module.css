@@ -80,10 +80,6 @@
     align-items: center;
     min-height: min(74vh, 760px);
   }
-  /* the list sits low, leaving the golden tree on the horizon in clear view */
-  .trials {
-    align-self: end;
-  }
 }
 
 .hero {
