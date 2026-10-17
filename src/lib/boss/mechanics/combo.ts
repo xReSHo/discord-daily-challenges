@@ -10,7 +10,7 @@
  *   corona    Nyrrek              strike in each dark; never in the light
  *   threads   The Unraveled Saint never the same trial as your last two
  *
- * All of them top out around ×1.5 for sustained good play, the heavy blows of
+ * All of them top out around ×1.5 for sustained good play (the Saint ×2.5), the heavy blows of
  * `breath` aside, which are few.
  *
  * No server deps — safe to import from the client arenas.
@@ -135,8 +135,8 @@ export function coronaMult(stacks: number): number {
 
 export const THREADS = {
   max: 4,
-  /** What each thread adds: four make ×1.5. */
-  perThread: 0.125,
+  /** What each thread adds: four make ×2.5. */
+  perThread: 0.375,
 } as const;
 
 export function threadsMult(chain: number): number {
