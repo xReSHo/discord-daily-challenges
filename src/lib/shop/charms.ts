@@ -206,7 +206,7 @@ export async function wardedDays(discordId: string): Promise<string[]> {
  * The days a ward covers for this player, spending wards from the pack where a
  * streak needs them (the rule is in ./ward-rule.ts).
  *
- * `kept` is the player's perfect days. Never throws: a failed read is "no
+ * `kept` is the days the player cleared a trial. Never throws: a failed read is "no
  * wards", which only ever shows a streak as shorter than it is.
  */
 export async function settleWards(discordId: string, kept: Iterable<string>): Promise<string[]> {

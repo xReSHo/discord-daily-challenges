@@ -24,6 +24,7 @@ import { evaluateAchievements, getActiveBoostPercent } from "@/lib/achievements/
 import { getSectionReward } from "@/lib/section-status";
 import { ensureDayRequirement } from "@/lib/day-requirement";
 import { later } from "@/lib/background";
+import { earnStreakWard } from "@/lib/streak";
 import { rollTrialDrop } from "@/lib/equipment-drops";
 import { fortuneFor } from "@/lib/equipment";
 import { getGear } from "@/lib/equipment-effects";
@@ -112,6 +113,8 @@ export async function completeSection(
       data: { rewarded: true },
     });
     later(() => evaluateAchievements(discordId));
+    // seven days in a row earns a Streak Ward (never throws)
+    later(() => earnStreakWard(discordId));
     // every finished trial is a chance at a piece of equipment (never throws)
     await rollTrialDrop(discordId, sectionId, date);
     return { status: "rewarded", amount: reward, newBalance };

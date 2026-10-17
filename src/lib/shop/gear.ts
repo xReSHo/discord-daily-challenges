@@ -318,7 +318,7 @@ GEAR.push(
     id: "streak-ward",
     name: "Streak Ward",
     stat: "Saves your streak",
-    effect: "Miss a day and your streak holds. It is spent on its own when you need it, and must be in your pack before the day you miss.",
+    effect: "Miss a day and your streak holds. It is spent on its own when you need it, and must be in your pack before the day you miss. Every 7 days in a row earns one free.",
     lasts: "One missed day",
     price: 3000,
     carry: 2,

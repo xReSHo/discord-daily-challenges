@@ -16,6 +16,7 @@ import { getShopSettings } from "@/lib/site-settings";
 import { isAdmin } from "@/lib/admin";
 import { GEAR, type Gear } from "@/lib/shop/gear";
 import { periodStart } from "@/lib/shop/inventory";
+import { NOT_EARNED } from "@/lib/shop/ward-rule";
 
 /** A website item as the shop UI needs it — price plus every reason it might
  *  not be buyable right now. */
@@ -114,7 +115,7 @@ async function purchaseState(discordId: string | undefined): Promise<{
     }),
     discordId
       ? prisma.purchase.findMany({
-          where: { discordId, itemId: { in: limited }, createdAt: { gte: week } },
+          where: { discordId, itemId: { in: limited }, createdAt: { gte: week }, ...NOT_EARNED },
           select: { itemId: true, createdAt: true },
         })
       : Promise.resolve([]),

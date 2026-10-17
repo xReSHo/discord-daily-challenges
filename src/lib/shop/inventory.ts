@@ -18,6 +18,7 @@ import { logger } from "@/lib/logger";
 import { getShopSettings } from "@/lib/site-settings";
 import { GEAR, RESTOCK_WEEKDAY, getGear, type Gear } from "@/lib/shop/gear";
 import { challengeDayBoundary, getChallengeDate } from "@/lib/challenge-date";
+import { NOT_EARNED } from "@/lib/shop/ward-rule";
 
 /** Rows that count as "this piece is in someone's hands". */
 const HELD = ["charging", "fulfilled"];
@@ -113,7 +114,8 @@ export async function buyGear(
       if (gear.limit) {
         const { n, per } = gear.limit;
         const bought = await tx.purchase.count({
-          where: { discordId, itemId: gear.id, createdAt: { gte: periodStart(per) } },
+          // a ward earned by a streak was never bought
+          where: { discordId, itemId: gear.id, createdAt: { gte: periodStart(per) }, ...NOT_EARNED },
         });
         if (bought >= n) {
           throw new BuyError(

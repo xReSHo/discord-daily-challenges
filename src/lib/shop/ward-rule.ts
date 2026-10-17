@@ -11,6 +11,18 @@
 
 const DAY_MS = 86_400_000;
 
+/** Every this many days in a row, a streak earns a free Streak Ward. */
+export const WARD_EARNED_EVERY = 7;
+
+/** The Purchase id of the ward a streak earned on `day`: one a day at most. */
+export function earnedWardId(discordId: string, day: string): string {
+  return `earned-ward-${discordId}-${day}`;
+}
+
+/** Leaves out the wards a streak earned: they are carried and spent like
+ *  bought ones, but never bought (shop limits, the "purchases" achievement). */
+export const NOT_EARNED = { NOT: { id: { startsWith: "earned-" } } };
+
 /** The most missed days in a row the wards will cover: what can be carried. */
 export const MAX_WARDED_GAP = 2;
 

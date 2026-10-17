@@ -35,6 +35,7 @@ const COUNT_LABEL: Record<string, string> = {
   trials_total: "How many trials",
   perfect_days: "How many perfect days",
   perfect_streak: "Days in a row",
+  streak: "Days in a row",
   wordle_guesses: "Guesses at most",
   boss_slain: "How many bosses",
   geodash_wins: "How many clears",
@@ -58,7 +59,7 @@ export function AchievementFields({ def }: { def?: AchievementDef }) {
   const count =
     t && "count" in t
       ? t.count
-      : t?.type === "perfect_streak"
+      : t?.type === "perfect_streak" || t?.type === "streak"
         ? t.days
         : t?.type === "wordle_guesses"
           ? t.max

@@ -3,7 +3,9 @@
  * the leaderboard.
  *
  * A "streak" is consecutive challenge-days (see src/lib/challenge-date.ts) on
- * which the player cleared *every* daily trial. `Completion.date` is stored as a
+ * which the player cleared *at least one* daily trial. Clearing every trial
+ * makes the day a "perfect day", counted (and rewarded) on its own; it used to
+ * be what a streak needed, and one hard game then broke most streaks. `Completion.date` is stored as a
  * `@db.Date` at 00:00 UTC, so day-stepping is plain arithmetic on those anchors
  * — no timezone or DST hazard.
  */
@@ -13,7 +15,11 @@ import { getChallengeDateString } from "@/lib/challenge-date";
 import { SECTION_IDS } from "@/lib/sections";
 import { getRequirements } from "@/lib/day-requirement";
 import { perfectDaysOf, type Requirements } from "@/lib/day-requirement-rule";
-import { settleWards } from "@/lib/shop/charms";
+import { charmCount, settleWards } from "@/lib/shop/charms";
+import { WARD_EARNED_EVERY, earnedWardId } from "@/lib/shop/ward-rule";
+import { getGear } from "@/lib/shop/gear";
+import { logger } from "@/lib/logger";
+import { Prisma } from "@prisma/client";
 
 const DAY_MS = 86_400_000;
 
@@ -58,6 +64,11 @@ export function streaksFromDays(days: Iterable<string>): {
   return { current, longest };
 }
 
+/** The days on which at least one trial was cleared: what keeps a streak. */
+export function keptDays(rows: { date: Date }[]): string[] {
+  return [...new Set(rows.map((r) => dayKey(r.date)))];
+}
+
 /**
  * The days on which every trial required that day was cleared (see
  * src/lib/day-requirement-rule.ts — the list changes when an admin switches
@@ -71,7 +82,7 @@ export function perfectDays(
 }
 
 export type UserStreak = {
-  /** consecutive days completing every trial */
+  /** consecutive days clearing at least one trial */
   current: number;
   longest: number;
   /** individual game completions ever (within the lookback window) */
@@ -106,15 +117,49 @@ export async function getUserStreak(discordId: string): Promise<UserStreak> {
   ]);
 
   const perfect = perfectDays(rows, requirements);
+  const kept = keptDays(rows);
   // a Streak Ward covers a missed day: the streak runs through it, though the
-  // day is not counted as a perfect one
-  const warded = await settleWards(discordId, perfect);
-  const { current, longest } = streaksFromDays([...perfect, ...warded]);
+  // day is not counted as an active one
+  const warded = await settleWards(discordId, kept);
+  const { current, longest } = streaksFromDays([...kept, ...warded]);
   return {
     current,
     longest,
     totalTrials: rows.length,
     perfectDayCount: perfect.length,
-    activeDays: new Set(rows.map((r) => dayKey(r.date))).size,
+    activeDays: kept.length,
   };
+}
+
+/**
+ * Every {@link WARD_EARNED_EVERY} days in a row, the streak earns a free Streak
+ * Ward — up to what the pack can carry. Called after a trial is cleared; the
+ * ward's id is fixed per day, so clearing a second trial that day earns
+ * nothing more. Never throws.
+ */
+export async function earnStreakWard(discordId: string): Promise<boolean> {
+  try {
+    const { current } = await getUserStreak(discordId);
+    if (current <= 0 || current % WARD_EARNED_EVERY !== 0) return false;
+    const ward = getGear("streak-ward");
+    if (!ward) return false;
+    if ((await charmCount(discordId, ward.id)) >= ward.carry) return false;
+    await prisma.purchase.create({
+      data: {
+        id: earnedWardId(discordId, getChallengeDateString()),
+        discordId,
+        itemId: ward.id,
+        itemName: ward.name,
+        price: 0,
+        status: "fulfilled",
+        fulfilledAt: new Date(),
+      },
+    });
+    logger.info("streak.ward_earned", { discordId, streak: current });
+    return true;
+  } catch (err) {
+    const again = err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002";
+    if (!again) logger.error("streak.ward_earn_failed", { discordId, message: String(err) });
+    return false;
+  }
 }

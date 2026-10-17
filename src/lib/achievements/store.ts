@@ -16,6 +16,7 @@ import {
   ACHIEVEMENT_ICON_NAMES,
   DEFAULT_ACHIEVEMENTS,
   duelAchievements,
+  streakAchievements,
   parseReward,
   parseTrigger,
   type AchievementDef,
@@ -54,6 +55,7 @@ async function seedDefaults(): Promise<void> {
  */
 const LATER: { marker: string; defs: () => AchievementDef[] }[] = [
   { marker: "achievements.added.duel", defs: duelAchievements },
+  { marker: "achievements.added.streak", defs: streakAchievements },
 ];
 let toppedUp = false;
 

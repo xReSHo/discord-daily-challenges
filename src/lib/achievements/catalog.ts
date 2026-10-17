@@ -102,6 +102,8 @@ export type AchievementTrigger =
   | { type: "perfect_days"; count: number }
   /** A run of `days` perfect days in a row. */
   | { type: "perfect_streak"; days: number }
+  /** A streak of `days` days in a row with at least one trial cleared. */
+  | { type: "streak"; days: number }
   /** Reach a score threshold in one game. */
   | { type: "score"; kind: ScoreKind; value: number }
   /** Solve a day's Wordle in at most `max` guesses. */
@@ -121,6 +123,7 @@ export const TRIGGER_TYPES: { type: AchievementTrigger["type"]; label: string }[
   { type: "trials_total", label: "Clear a number of trials" },
   { type: "perfect_days", label: "Perfect days (total)" },
   { type: "perfect_streak", label: "Perfect days in a row" },
+  { type: "streak", label: "Days in a row (any trial)" },
   { type: "score", label: "Reach a score" },
   { type: "wordle_guesses", label: "Solve Wordle in few guesses" },
   { type: "boss_slain", label: "Fight in bosses that fall" },
@@ -159,6 +162,10 @@ export function parseTrigger(raw: unknown): AchievementTrigger | null {
     case "perfect_streak": {
       const days = posInt(t.days, 3650);
       return days ? { type: "perfect_streak", days } : null;
+    }
+    case "streak": {
+      const days = posInt(t.days, 3650);
+      return days ? { type: "streak", days } : null;
     }
     case "score": {
       const kind = String(t.kind);
@@ -212,6 +219,8 @@ export function triggerLine(t: AchievementTrigger): string {
       return `${plural(t.count, "perfect day")}`;
     case "perfect_streak":
       return `${plural(t.days, "perfect day")} in a row`;
+    case "streak":
+      return `A ${t.days}-day streak (any trial)`;
     case "score":
       return `${SCORE_KINDS[t.kind].label} ${t.value.toLocaleString()}`;
     case "wordle_guesses":
@@ -501,6 +510,52 @@ export const DEFAULT_ACHIEVEMENTS: AchievementDef[] = [
  * The pit's achievements. Added after the table was first seeded, so the
  * store tops an existing table up with them once (see ./store.ts).
  */
+/** The streak milestones: days in a row with at least one trial cleared. */
+export function streakAchievements(): AchievementDef[] {
+  return [
+    {
+      key: "ember",
+      name: "Ember",
+      description: "Clear a trial three days in a row.",
+      icon: "zap",
+      trigger: { type: "streak", days: 3 },
+      reward: { kind: "coins", amount: 2000 },
+      enabled: true,
+      sortOrder: 75,
+    },
+    {
+      key: "tended-flame",
+      name: "Tended Flame",
+      description: "Clear a trial seven days in a row.",
+      icon: "flame",
+      trigger: { type: "streak", days: 7 },
+      reward: { kind: "coins", amount: 5000 },
+      enabled: true,
+      sortOrder: 76,
+    },
+    {
+      key: "fortnight-vigil",
+      name: "Fortnight's Vigil",
+      description: "Clear a trial fourteen days in a row.",
+      icon: "star",
+      trigger: { type: "streak", days: 14 },
+      reward: { kind: "coins", amount: 12000 },
+      enabled: true,
+      sortOrder: 77,
+    },
+    {
+      key: "undying-flame",
+      name: "Undying Flame",
+      description: "Clear a trial thirty days in a row.",
+      icon: "crown",
+      trigger: { type: "streak", days: 30 },
+      reward: { kind: "coins", amount: 30000 },
+      enabled: true,
+      sortOrder: 78,
+    },
+  ];
+}
+
 export function duelAchievements(): AchievementDef[] {
   return [
     {

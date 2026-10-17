@@ -162,7 +162,7 @@ export default async function LeaderboardPage() {
         }
       >
         <p className={styles.sub}>
-          Ranked by the current run of days with every trial bested, then by trials bested. Last 90
+          Ranked by the current run of days with at least one trial bested, then by trials bested. Last 90
           days.
         </p>
       </PageHero>

@@ -1,6 +1,6 @@
 /**
  * The streak leaderboard: every player who has bested a trial in the last 90
- * days, ranked by current streak (consecutive days completing every trial),
+ * days, ranked by current streak (consecutive days clearing at least one trial),
  * then longest streak, then trials bested. Each row also carries the short
  * summary of that player anyone may see — counted from the same rows, plus one
  * count of achievements.
@@ -12,7 +12,7 @@
 import { prisma } from "@/lib/prisma";
 import { wardedDaysByPlayer } from "@/lib/shop/charms";
 import { getChallengeDateString } from "@/lib/challenge-date";
-import { streaksFromDays, perfectDays } from "@/lib/streak";
+import { streaksFromDays, perfectDays, keptDays } from "@/lib/streak";
 import { SECTION_IDS } from "@/lib/sections";
 import { getRequirements } from "@/lib/day-requirement";
 
@@ -93,7 +93,10 @@ async function build(): Promise<BaseRow[]> {
   for (const id of ids) {
     const completions = byUser.get(id)!;
     const perfect = perfectDays(completions, requirements);
-    const { current, longest } = streaksFromDays([...perfect, ...(warded.get(id) ?? [])]);
+    const { current, longest } = streaksFromDays([
+      ...keptDays(completions),
+      ...(warded.get(id) ?? []),
+    ]);
     const games: Record<string, number> = {};
     const days = new Set<string>();
     for (const c of completions) {

@@ -93,7 +93,7 @@ export async function YourRecord({ discordId }: { discordId: string }) {
   const fill = longest > 0 ? Math.min(1, current / longest) : 0;
   const streakNote =
     current <= 0
-      ? "Best every trial today to light the flame."
+      ? "Best any trial today to light the flame."
       : current >= longest
         ? "This is your longest run yet."
         : `${longest - current} more ${longest - current === 1 ? "day" : "days"} to match your best.`;
@@ -141,7 +141,7 @@ export async function YourRecord({ discordId }: { discordId: string }) {
           <Tile icon={Swords} value={p.totalTrials} label="trials bested" hint="Every trial cleared, all time" />
           <Tile icon={Sparkles} value={p.perfectDays} label="perfect days" hint="Days with every trial bested" />
           <Tile icon={CalendarCheck} value={p.activeDays} label="days active" hint="Days with at least one trial" />
-          <Tile icon={Trophy} value={longest} label="longest streak" hint="Your best run of perfect days" />
+          <Tile icon={Trophy} value={longest} label="longest streak" hint="Your best run of days with a trial bested" />
           <Tile
             icon={Coins}
             value={p.lifetimeCoins.toLocaleString("en-US")}

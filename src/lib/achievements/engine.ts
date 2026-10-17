@@ -30,7 +30,8 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { wardedDays } from "@/lib/shop/charms";
-import { perfectDays, streaksFromDays } from "@/lib/streak";
+import { NOT_EARNED } from "@/lib/shop/ward-rule";
+import { keptDays, perfectDays, streaksFromDays } from "@/lib/streak";
 import { getRequirements } from "@/lib/day-requirement";
 import { SECTION_IDS } from "@/lib/sections";
 import { addCurrency } from "@/lib/unbelievaboat";
@@ -47,7 +48,7 @@ import { getAllAchievementDefs, getEnabledAchievementDefs } from "./store";
 const SINCE = { gte: ACHIEVEMENTS_LAUNCH_AT };
 
 /** Per-evaluation memo, so several streak achievements share one query. */
-type EvalCtx = { perfect?: Promise<string[]> };
+type EvalCtx = { perfect?: Promise<string[]>; kept?: Promise<string[]> };
 
 /** Days (since ACHIEVEMENTS_LAUNCH_AT) on which every required trial was
  *  cleared — the same grouping `getUserStreak` does, just scoped to rows
@@ -69,6 +70,24 @@ function perfectDaysSinceLaunch(discordId: string, ctx: EvalCtx): Promise<string
     return perfectDays(rows, requirements);
   })();
   return ctx.perfect;
+}
+
+/** Days (since ACHIEVEMENTS_LAUNCH_AT) on which at least one trial was
+ *  cleared: what keeps a streak. */
+function keptDaysSinceLaunch(discordId: string, ctx: EvalCtx): Promise<string[]> {
+  ctx.kept ??= (async () =>
+    keptDays(
+      await prisma.completion.findMany({
+        where: {
+          discordId,
+          rewarded: true,
+          section: { in: [...SECTION_IDS] },
+          createdAt: SINCE,
+        },
+        select: { date: true },
+      }),
+    ))();
+  return ctx.kept;
 }
 
 async function checkTrigger(
@@ -95,6 +114,13 @@ async function checkTrigger(
       return (
         streaksFromDays([
           ...(await perfectDaysSinceLaunch(discordId, ctx)),
+          ...(await wardedDays(discordId).catch(() => [])),
+        ]).longest >= t.days
+      );
+    case "streak":
+      return (
+        streaksFromDays([
+          ...(await keptDaysSinceLaunch(discordId, ctx)),
           ...(await wardedDays(discordId).catch(() => [])),
         ]).longest >= t.days
       );
@@ -152,8 +178,8 @@ async function checkTrigger(
     case "purchases":
       return (
         (await prisma.purchase.count({
-          // gear that has been used was still bought
-          where: { discordId, status: { in: ["fulfilled", "used"] }, createdAt: SINCE },
+          // gear that has been used was still bought; a ward a streak earned was not
+          where: { discordId, status: { in: ["fulfilled", "used"] }, createdAt: SINCE, ...NOT_EARNED },
         })) >= t.count
       );
     case "duel_wins":
