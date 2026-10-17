@@ -72,6 +72,9 @@ export type BossState = {
   hornUntil?: number;
   /** One-line "how to fight" copy for the arena + the bot spawn embed. */
   blurb: string;
+  /** The number of active players this boss's health and bounty were scaled
+   *  for, or null when it kept what was set (see src/lib/boss/scaling.ts). */
+  scaledFor: number | null;
   /** Portrait asset base path — `${image}.webp` / `${image}.png`. */
   image: string;
   /** Admin-spawned test boss — only admins see or fight it. */

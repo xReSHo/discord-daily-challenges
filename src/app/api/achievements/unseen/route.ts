@@ -6,6 +6,7 @@ import { getAllAchievementDefs } from "@/lib/achievements/store";
 import { catchUpAchievements } from "@/lib/achievements/engine";
 import { isDevMode } from "@/lib/dev-mode";
 import { unseenDrops } from "@/lib/equipment-drops";
+import { markSeen } from "@/lib/seen";
 
 /** GET /api/achievements/unseen — achievements unlocked since the last time
  *  the popup showed them, oldest first, with the name/icon/reward text the
@@ -22,6 +23,9 @@ export async function GET() {
 
   const limited = await rateLimit("achievements:unseen", RATE_RULES.read, discordId);
   if (limited) return limited;
+
+  // on record as having been here this week (a raid's penalty reads it)
+  await markSeen(discordId);
 
   // The first page a player loads also settles anything they are owed: an
   // achievement they earned but never got, or a reward that failed to arrive.

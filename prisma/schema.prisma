@@ -23,6 +23,9 @@ model User {
   accounts      Account[]
   sessions      Session[]
   createdAt     DateTime  @default(now())
+  /// Last time the player opened the site (see src/lib/seen.ts), at most every
+  /// half hour. A raid boss that gets away charges those seen that week.
+  lastSeenAt    DateTime?
 }
 
 model Account {

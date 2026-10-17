@@ -9,6 +9,7 @@ import { challengeInstant, formatAdminTime, getChallengeDate } from "@/lib/chall
 import { BOSS_DEFAULTS, MAX_BOSS_PENALTY, bustBossConfigCache, capPenalty, getBossConfig } from "@/lib/boss/config";
 import { bustRosterCache, getRoster, getTemplate } from "@/lib/boss/roster";
 import { resolveBoss, despawnBoss as despawnBossById } from "@/lib/boss/game";
+import { saveRaidScaling } from "@/lib/site-settings";
 import type { Prisma } from "@prisma/client";
 
 /** Full admin gate (allowlist + unlocked second factor), then an audit row
@@ -86,6 +87,26 @@ export async function saveBossConfig(fd: FormData): Promise<void> {
   bustBossConfigCache();
   refresh();
   flash("ok", schedule.weeklyEnabled ? "Schedule saved." : "Schedule saved — the weekly raid is off.");
+}
+
+/** How a weekly boss's health follows the number of active players. */
+export async function saveBossScaling(fd: FormData): Promise<void> {
+  await requireAdmin("saveBossScaling", fd);
+  const saved = await saveRaidScaling({
+    enabled: fd.get("enabled") === "on",
+    basePlayers: Number(fd.get("basePlayers")),
+    rewardShare: Number(fd.get("rewardShare")),
+    windowDays: Number(fd.get("windowDays")),
+    minPlayers: Number(fd.get("minPlayers")),
+    maxPlayers: Number(fd.get("maxPlayers")),
+  });
+  refresh();
+  flash(
+    "ok",
+    saved.enabled
+      ? `Scaling saved: a boss's health is set for ${saved.basePlayers} players. It applies from the next weekly raid.`
+      : "Scaling is off: every weekly boss keeps the health set below.",
+  );
 }
 
 /**

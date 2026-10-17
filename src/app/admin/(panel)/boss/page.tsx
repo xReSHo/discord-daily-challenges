@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowUpRight, CalendarClock, Swords } from "lucide-react";
+import { ArrowUpRight, CalendarClock, Swords, Users } from "lucide-react";
 import { Prisma } from "@prisma/client";
 import { asDate, loadAdminPage } from "@/lib/admin-auth";
 import { AdminShell, Field, readFlash } from "@/app/admin/ui";
@@ -8,8 +8,11 @@ import { formatAdminTime } from "@/lib/challenge-date";
 import { MAX_BOSS_PENALTY, bossConfigFromRow, type BossConfig } from "@/lib/boss/config";
 import { weeklyWindow } from "@/lib/boss/window";
 import type { BossTemplateRow } from "@/lib/boss/roster";
+import { parseRaidScaling } from "@/lib/site-settings";
+import { scaledHp, scaledReward } from "@/lib/boss/scaling";
 import {
   saveBossConfig,
+  saveBossScaling,
   saveBossTemplate,
   spawnBoss,
   resolveBossNow,
@@ -246,7 +249,23 @@ export default async function AdminBossPage({
         b."adminOnly", b."paysOut", b.resolved, b.slain,
         (SELECT count(*)::int FROM "BossHit" h WHERE h."bossId" = b.id AND h.clicks > 0) AS hits
       FROM "Boss" b ORDER BY b.resolved ASC, b."spawnsAt" DESC LIMIT 14`,
+    scaling: Prisma.sql`SELECT value FROM "SiteSetting" WHERE key = 'raid.scaling'`,
+    // players active in the scaling window up to now (the same rule as
+    // countActivePlayers in src/lib/boss/scaling.ts), for the preview
+    active: Prisma.sql`
+      SELECT count(*)::int AS n FROM (
+        SELECT c."discordId" FROM "Completion" c
+          WHERE c.rewarded AND c."createdAt" >= now() - make_interval(days => COALESCE(
+            (SELECT (value->>'windowDays')::int FROM "SiteSetting" WHERE key = 'raid.scaling'), 7))
+        UNION
+        SELECT h."discordId" FROM "BossHit" h
+          WHERE h.damage > 0 AND h."lastHitAt" >= now() - make_interval(days => COALESCE(
+            (SELECT (value->>'windowDays')::int FROM "SiteSetting" WHERE key = 'raid.scaling'), 7))
+      ) a JOIN "User" u ON u."discordId" = a."discordId"`,
   });
+  const scaling = parseRaidScaling(data.scaling[0]?.value);
+  const activeNow = Number(data.active[0]?.n ?? 0);
+  const playersNow = Math.max(scaling.minPlayers, Math.min(scaling.maxPlayers, activeNow));
   const cfg = bossConfigFromRow(data.cfg[0] as Partial<BossConfig> | undefined);
   const roster = data.roster.map(
     (t) => ({ ...t, updatedAt: asDate(t.updatedAt) }) as unknown as BossTemplateRow,
@@ -353,7 +372,7 @@ export default async function AdminBossPage({
                       busy="Settling…"
                       confirm={
                         b.paysOut
-                          ? "End this raid now and settle it? Real coins will be paid to those who fought, or taken from every player if it survived."
+                          ? "End this raid now and settle it? Real coins will be paid to those who fought, or taken from every player around this week if it survived."
                           : "End this raid now and settle it? No real coins move for this one."
                       }
                     >
@@ -536,6 +555,73 @@ export default async function AdminBossPage({
         </form>
       </div>
 
+      {/* ---------- health scaling ---------- */}
+      <div className={styles.block}>
+        <h3 className={styles.blockTitle}>Health scaling</h3>
+        <form action={saveBossScaling} className={`${styles.card} ${scaling.enabled ? "" : styles.cardOff}`}>
+          <div className={styles.cardHead}>
+            <span className={styles.cardTitle}>
+              <Users size={14} /> {activeNow} player{activeNow === 1 ? "" : "s"} active in the last{" "}
+              {scaling.windowDays} day{scaling.windowDays === 1 ? "" : "s"}
+            </span>
+            <span className={styles.cardSub}>
+              {scaling.enabled
+                ? `A raid spawning now would be set for ${playersNow} player${playersNow === 1 ? "" : "s"}`
+                : "Every weekly boss keeps its set health"}
+            </span>
+            <span className={`${styles.pill} ${scaling.enabled ? styles.pillOk : styles.pillBad}`}>
+              {scaling.enabled ? "on" : "off"}
+            </span>
+          </div>
+          <p className={styles.panelNote}>
+            Each boss&apos;s health and reward pool below are what it has for the number of players set
+            here. A weekly raid takes that share of the health for every player who cleared a trial or
+            struck a boss in the days before it spawns, so a quiet week and a busy one are both
+            winnable. The bounty moves only part of the way, so a quiet week pays each fighter a little
+            more. The penalty never scales. Raids started by hand are never scaled.
+          </p>
+          <div className={styles.formGrid}>
+            <Field label="Health below is for (players)">
+              <input name="basePlayers" type="number" min={1} max={100} step={1} defaultValue={scaling.basePlayers} className={styles.input} />
+            </Field>
+            <Field label="Count players active in the last (days)">
+              <input name="windowDays" type="number" min={1} max={30} step={1} defaultValue={scaling.windowDays} className={styles.input} />
+            </Field>
+            <Field label="Never fewer than (players)" hint="A quiet week still gets this much health.">
+              <input name="minPlayers" type="number" min={1} max={100} step={1} defaultValue={scaling.minPlayers} className={styles.input} />
+            </Field>
+            <Field label="Never more than (players)">
+              <input name="maxPlayers" type="number" min={1} max={100} step={1} defaultValue={scaling.maxPlayers} className={styles.input} />
+            </Field>
+            <Field
+              label="Bounty follows the health by (%)"
+              hint="100 = as far as the health, 0 = the bounty never changes."
+            >
+              <input name="rewardShare" type="number" min={0} max={100} step={1} defaultValue={scaling.rewardShare} className={styles.input} />
+            </Field>
+          </div>
+          {scaling.enabled && roster.length > 0 && (
+            <p className={styles.raidFacts}>
+              {roster.map((t) => (
+                <span key={t.key}>
+                  {t.name.split(",")[0]} <b>{coins(scaledHp(t.maxHp, activeNow, scaling))}</b> health,{" "}
+                  <b>{coins(scaledReward(t.rewardPool, activeNow, scaling))}</b> reward
+                </span>
+              ))}
+            </p>
+          )}
+          <div className={styles.checks}>
+            <label className={styles.check}>
+              <input type="checkbox" name="enabled" defaultChecked={scaling.enabled} />
+              <span>Scale each weekly boss&apos;s health and reward to the players active</span>
+            </label>
+          </div>
+          <div className={styles.formActions}>
+            <SubmitButton>Save scaling</SubmitButton>
+          </div>
+        </form>
+      </div>
+
       {/* ---------- the bosses ---------- */}
       <div className={styles.block}>
         <h3 className={styles.blockTitle}>
@@ -562,7 +648,8 @@ export default async function AdminBossPage({
                   <span className={styles.cardTitle}>{t.name}</span>
                   <span className={styles.cardSub}>
                     {MECHANIC[t.mechanic]?.label ?? t.mechanic} · {coins(t.maxHp)} health ·{" "}
-                    {coins(t.rewardPool)} reward · {coins(t.penalty)} penalty
+                    {coins(t.rewardPool)} reward{scaling.enabled ? ` (for ${scaling.basePlayers} players)` : ""} ·{" "}
+                    {coins(t.penalty)} penalty
                   </span>
                   <span className={`${styles.pill} ${t.enabled ? styles.pillOk : styles.pillBad}`}>
                     {t.enabled ? "in the draw" : "benched"}
@@ -577,10 +664,20 @@ export default async function AdminBossPage({
                     <Field label="Name">
                       <input name="name" defaultValue={t.name} maxLength={80} className={styles.input} />
                     </Field>
-                    <Field label="Health">
+                    <Field
+                      label="Health"
+                      hint={scaling.enabled ? `For ${scaling.basePlayers} active players; scaled each week.` : undefined}
+                    >
                       <input name="maxHp" type="number" min={1} step={1} defaultValue={t.maxHp} className={styles.input} />
                     </Field>
-                    <Field label="Reward pool (coins)" hint="Split between fighters by damage.">
+                    <Field
+                      label="Reward pool (coins)"
+                      hint={
+                        scaling.enabled
+                          ? `For ${scaling.basePlayers} active players; scaled each week. Split by damage.`
+                          : "Split between fighters by damage."
+                      }
+                    >
                       <input name="rewardPool" type="number" min={0} step={1} defaultValue={t.rewardPool} className={styles.input} />
                     </Field>
                     <Field label="Penalty each (coins)" hint={`If it survives. ${coins(MAX_BOSS_PENALTY)} at most.`}>

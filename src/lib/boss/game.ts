@@ -34,6 +34,7 @@ import { evaluateAchievements } from "@/lib/achievements/engine";
 import { later } from "@/lib/background";
 import { capPenalty, getBossConfig, type BossConfig } from "./config";
 import { pickWeeklyTemplate } from "./roster";
+import { scaledForOf, weeklyScale } from "./scaling";
 import { eclipseConfig, eclipsePhaseAt } from "./mechanics/eclipse";
 import {
   BREATH,
@@ -221,16 +222,25 @@ async function lazyCreateWeekly(cfg: BossConfig): Promise<BossRow | null> {
   if (existing) return existing;
 
   const tpl = await pickWeeklyTemplate(win.weekOf);
+  // the health and the bounty follow how many people have been playing (see ./scaling.ts)
+  const scaled = tpl ? await weeklyScale(tpl.maxHp, tpl.rewardPool, win.spawnsAt) : null;
   const snapshot = tpl
     ? {
         templateKey: tpl.key,
         name: tpl.name,
         mechanic: tpl.mechanic,
-        params: tpl.params as Prisma.InputJsonValue,
+        params: (scaled?.scaledFor
+          ? {
+              ...(tpl.params as Record<string, unknown>),
+              scaledFor: scaled.scaledFor,
+              baseHp: tpl.maxHp,
+              baseReward: tpl.rewardPool,
+            }
+          : tpl.params) as Prisma.InputJsonValue,
         image: tpl.image,
         blurb: tpl.blurb,
-        maxHp: tpl.maxHp,
-        rewardPool: tpl.rewardPool,
+        maxHp: scaled?.maxHp ?? tpl.maxHp,
+        rewardPool: scaled?.rewardPool ?? tpl.rewardPool,
         penalty: capPenalty(tpl.penalty),
       }
     : {
@@ -544,6 +554,7 @@ export async function getBossState(
     kit: live ? kit : undefined,
     hornUntil: boss && live ? hornUntilOf(boss) : 0,
     blurb: boss?.blurb ?? "",
+    scaledFor: boss ? scaledForOf(boss.params) : null,
     image: boss?.image ?? "/boss/veyrath-idle",
     adminOnly: boss?.adminOnly ?? false,
     paysOut: boss?.paysOut ?? true,
@@ -1280,16 +1291,55 @@ export type ResolveResult = {
   unsettled: number;
 };
 
+/** Raids spawning from this instant charge only the players around that week
+ *  (see enlistBystanders); earlier ones charged every player. Saturday
+ *  2026-10-24, 00:00 Bahrain time. */
+const PENALTY_ACTIVE_FROM = new Date("2026-10-23T21:00:00.000Z");
+/** How far back from a raid's close "around that week" reaches. */
+const PENALTY_WINDOW_MS = 7 * 86_400_000;
+
 /**
- * Give every player who did not fight a row in this raid, so the penalty for a
- * boss that got away is claimed and charged for them exactly as for a fighter.
- * Only players who had signed in before the raid closed.
+ * Give every player who did not fight, but was around that week, a row in this
+ * raid, so the penalty for a boss that got away is claimed and charged for them
+ * exactly as for a fighter. "Around" means they opened the site, signed up, or
+ * cleared a daily trial in the week up to the raid's close; staying out of the
+ * arena does not spare them, staying away from the site all week does.
  */
-async function enlistBystanders(boss: { id: string; expiresAt: Date }): Promise<void> {
+async function enlistBystanders(boss: {
+  id: string;
+  spawnsAt: Date;
+  expiresAt: Date;
+}): Promise<void> {
+  const since = new Date(boss.expiresAt.getTime() - PENALTY_WINDOW_MS);
+  const aroundOnly = boss.spawnsAt >= PENALTY_ACTIVE_FROM;
   const players = await prisma.user.findMany({
-    where: { discordId: { not: null }, createdAt: { lte: boss.expiresAt } },
+    where: {
+      discordId: { not: null },
+      createdAt: { lte: boss.expiresAt },
+      ...(aroundOnly ? { OR: [{ lastSeenAt: { gte: since } }, { createdAt: { gte: since } }] } : {}),
+    },
     select: { discordId: true },
   });
+  if (aroundOnly) {
+    // and those who cleared a trial that week, whatever their last visit says
+    const known = new Set(players.map((p) => p.discordId));
+    const cleared = await prisma.completion.findMany({
+      where: { rewarded: true, createdAt: { gte: since, lte: boss.expiresAt } },
+      distinct: ["discordId"],
+      select: { discordId: true },
+    });
+    const signedUp = new Set(
+      (
+        await prisma.user.findMany({
+          where: { discordId: { in: cleared.map((c) => c.discordId) } },
+          select: { discordId: true },
+        })
+      ).map((u) => u.discordId),
+    );
+    for (const c of cleared) {
+      if (!known.has(c.discordId) && signedUp.has(c.discordId)) players.push({ discordId: c.discordId });
+    }
+  }
   if (players.length === 0) return;
   await prisma.bossHit.createMany({
     data: players.map((p) => ({ bossId: boss.id, discordId: p.discordId!, damage: 0, clicks: 0 })),
@@ -1322,8 +1372,9 @@ export async function resolveBoss(bossId?: string): Promise<ResolveResult> {
     };
   }
 
-  // A boss that got away costs every player, whether they fought or not. A
-  // test raid (admins only, or one that moves no coins) stays with its fighters.
+  // A boss that got away costs every player around that week, whether they
+  // fought or not (see enlistBystanders). A test raid (admins only, or one
+  // that moves no coins) stays with its fighters.
   const everyone = !boss.slain && !boss.adminOnly && boss.paysOut;
   if (everyone) await enlistBystanders(boss);
 

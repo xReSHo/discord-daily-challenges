@@ -141,6 +141,12 @@ export function Stage({
                 </span>
                 <span>{pct < 1 && pct > 0 ? "<1" : Math.round(pct)}%</span>
               </div>
+              {state.scaledFor !== null && (
+                <p className={styles.hpScaled}>
+                  Health and bounty set for the {state.scaledFor} player{state.scaledFor === 1 ? "" : "s"}{" "}
+                  active this week
+                </p>
+              )}
             </div>
           )}
           {onUse && !focus && <KitBar state={state} onState={onUse} beforeUse={beforeUse} />}
@@ -149,7 +155,7 @@ export function Stage({
               <Coins size={13} /> <b>{state.rewardPool.toLocaleString("en-US")}</b> bounty, split by damage
             </span>
             <span>
-              <Skull size={13} /> every player loses <b>{state.penaltyEach.toLocaleString("en-US")}</b> if it survives
+              <Skull size={13} /> everyone on the site this week loses <b>{state.penaltyEach.toLocaleString("en-US")}</b> if it survives
             </span>
           </p>
         </footer>
@@ -240,7 +246,7 @@ export function Outcome({ state }: { state: BossState }) {
   if (state.yourPayout !== null && state.yourPayout < 0) {
     return (
       <p className={`${styles.sub} ${styles.lost}`}>
-        {state.yourPayout.toLocaleString("en-US")} coins — {state.name} lived, and every player pays.
+        {state.yourPayout.toLocaleString("en-US")} coins — {state.name} lived, and everyone on the site this week pays.
       </p>
     );
   }

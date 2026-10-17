@@ -319,3 +319,56 @@ export async function saveCrateSettings(input: unknown): Promise<CrateSettings> 
   await writeRaw("crate", clean);
   return clean;
 }
+
+// --- raid health scaling ----------------------------------------------------
+
+/**
+ * How a weekly boss's health follows the number of players. A boss's health in
+ * /admin/boss is what it has for `basePlayers` active players; each weekly
+ * spawn takes that share for every player active in the `windowDays` before it
+ * (between `minPlayers` and `maxPlayers`). The bounty moves `rewardShare`
+ * percent as far as the health does: at 50, a raid at a fifth of its health
+ * pays three fifths of its bounty, so a quiet week pays each fighter a little
+ * more. Manual raids are never scaled.
+ */
+export type RaidScaling = {
+  enabled: boolean;
+  basePlayers: number;
+  rewardShare: number;
+  windowDays: number;
+  minPlayers: number;
+  maxPlayers: number;
+};
+
+export const RAID_SCALING_DEFAULTS: RaidScaling = {
+  enabled: true,
+  basePlayers: 5,
+  rewardShare: 50,
+  windowDays: 7,
+  minPlayers: 1,
+  maxPlayers: 30,
+};
+
+export function parseRaidScaling(value: unknown): RaidScaling {
+  const raw = obj(value);
+  const d = RAID_SCALING_DEFAULTS;
+  const minPlayers = int(raw.minPlayers, d.minPlayers, 1, 100);
+  return {
+    enabled: raw.enabled === undefined ? d.enabled : raw.enabled === true,
+    basePlayers: int(raw.basePlayers, d.basePlayers, 1, 100),
+    rewardShare: int(raw.rewardShare, d.rewardShare, 0, 100),
+    windowDays: int(raw.windowDays, d.windowDays, 1, 30),
+    minPlayers,
+    maxPlayers: Math.max(minPlayers, int(raw.maxPlayers, d.maxPlayers, 1, 100)),
+  };
+}
+
+export async function getRaidScaling(): Promise<RaidScaling> {
+  return parseRaidScaling(await readRaw("raid.scaling"));
+}
+
+export async function saveRaidScaling(input: unknown): Promise<RaidScaling> {
+  const clean = parseRaidScaling(input);
+  await writeRaw("raid.scaling", clean);
+  return clean;
+}

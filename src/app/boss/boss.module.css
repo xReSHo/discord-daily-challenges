@@ -486,6 +486,13 @@
   color: var(--ink-faint);
 }
 
+.hpScaled {
+  margin-top: 4px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
 .stakes {
   display: flex;
   flex-wrap: wrap;
