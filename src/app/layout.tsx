@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Cinzel, EB_Garamond, Inter, JetBrains_Mono } from "next/font/google";
 import { Atmosphere } from "@/components/Atmosphere";
 import { ClickSpark } from "@/components/ClickSpark";
+import { CookieNotice } from "@/components/CookieNotice";
 import { GraceEmbers } from "@/components/GraceEmbers";
 import { GracePreload } from "@/components/GracePreload";
 import { PageTransitions } from "@/components/PageTransitions";
@@ -72,6 +73,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <ClickSpark />
         <PageTransitions />
         {children}
+        <CookieNotice />
       </body>
     </html>
   );
