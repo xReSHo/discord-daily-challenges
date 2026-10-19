@@ -175,7 +175,13 @@ export function AimTrainer({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token: e.token, hits: e.hits, strays: e.strays, aspect: e.aspect }),
       });
-      const data = (await res.json()) as SubmitResponse;
+      const data = (await res.json().catch(() => ({}))) as SubmitResponse | { error?: string; message?: string };
+      // refused before it was judged (too many requests, the trial closed): not a lost round
+      if (!("ok" in data) || typeof data.ok !== "boolean") {
+        const why = data as { error?: string; message?: string };
+        setError(why.message ?? why.error ?? "The round could not be sent. Try again.");
+        return;
+      }
       setResult(data);
       play(data.ok ? "win" : "lose");
       if (data.ok || data.failed) speakTrial("aim", data.ok);

@@ -26,7 +26,9 @@ import {
   getSectionRewards,
   getVisibleSectionIds,
 } from "@/lib/section-status";
-import { formatChallengeClock, getChallengeDateString } from "@/lib/challenge-date";
+import { formatChallengeClock, getChallengeDate, getChallengeDateString } from "@/lib/challenge-date";
+import { getRequirements } from "@/lib/day-requirement";
+import { requiredFor } from "@/lib/day-requirement-rule";
 import { getUserStreak } from "@/lib/streak";
 import { SECTIONS, type SectionId } from "@/lib/sections";
 import { getBossState } from "@/lib/boss/game";
@@ -218,6 +220,13 @@ export default async function Dashboard() {
       !disabledSections.has(id),
   );
   const chances = discordId && reopenable.length > 0 ? await charmCount(discordId, "second-chance") : 0;
+  // a perfect day is every game *required today* bested (see day-requirement-rule.ts),
+  // which is not always every game on the board; only looked up once something is done
+  const need =
+    discordId && doneCount > 0
+      ? requiredFor(getChallengeDateString(), await getRequirements(getChallengeDate()))
+      : new Set<string>();
+  const perfectToday = need.size > 0 && [...need].every((id) => outcomes.get(id as SectionId)?.state === "done");
 
   return (
     <AppFrame flow="/dashboard" raidAlert={false}>
@@ -250,7 +259,7 @@ export default async function Dashboard() {
       </PageHero>
 
       <div className="container">
-        {discordId && sectionIds.length > 0 && doneCount === sectionIds.length && <PerfectDayVoice />}
+        {perfectToday && <PerfectDayVoice />}
         <Suspense fallback={null}>
           <RaidBanner discordId={discordId} />
         </Suspense>
