@@ -10,7 +10,7 @@ import styles from "./shop.module.css";
 
 const WHY: Record<Exclude<GearUiItem["state"], "buy">, string> = {
   soon: "Coming soon",
-  full: "Already in your pack",
+  full: "In your pack",
   kitFull: "You carry part of this",
   soldOut: "Sold out",
   limit: "Bought already",

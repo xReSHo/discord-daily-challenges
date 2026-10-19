@@ -230,6 +230,8 @@
   border: 1px solid var(--line-2);
   border-radius: var(--r);
   justify-content: center;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .buyOwned {
@@ -313,6 +315,7 @@
   padding: 7px 12px;
   font-size: 10.5px;
   font-weight: 700;
+  line-height: 1;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--gold);
@@ -323,11 +326,26 @@
     border-color 0.2s var(--ease);
 }
 
+.packLink svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+/* letter-spacing leaves a gap after the last letter: take it back, so the
+   word sits evenly between the icon and the count */
+.packText {
+  margin-right: -0.14em;
+}
+
 .packLink b {
+  display: inline-grid;
+  place-items: center;
   min-width: 18px;
-  padding: 1px 5px;
+  height: 18px;
+  padding: 0 5px;
   font-family: var(--f-mono);
   font-size: 11px;
+  line-height: 1;
   letter-spacing: 0;
   text-align: center;
   color: #1a1409;
@@ -500,22 +518,26 @@
 
 .gearEffect {
   margin-top: 8px;
+  /* the least room left above the facts, which sit at the card's foot */
+  margin-bottom: 16px;
   font-size: 12.5px;
   line-height: 1.5;
   color: var(--ink-dim);
 }
 
+/* the three facts: each column as wide as its words need, the spare room
+   shared out; pushed to the card's foot, so the facts and the price line up
+   along a row of cards whatever the length of the text above them */
 .gearFacts {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  margin: 16px 0 0;
+  grid-template-columns: repeat(3, auto);
+  margin: auto 0 0;
   border: 1px solid var(--line);
   border-radius: var(--r);
 }
 
 .gearFacts > div {
   padding: 8px 10px;
-  min-width: 0;
 }
 
 .gearFacts > div + div {
@@ -537,8 +559,11 @@
   margin: 4px 0 0;
   font-size: 12px;
   font-weight: 600;
+  line-height: 1.3;
   color: var(--ink);
-  white-space: nowrap;
+  /* a long value takes a second line in its own box, never the next one,
+     and only ever between words ("Unlimited" is never split) */
+  text-wrap: balance;
 }
 
 /* what a bundle holds */
@@ -546,7 +571,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin: 14px 0 0;
+  margin: auto 0 0;
   padding: 6px 10px;
   list-style: none;
   border: 1px solid var(--line);
@@ -567,13 +592,19 @@
   object-fit: contain;
 }
 
+/* the price and the button side by side; a label too long to sit beside the
+   price ("Already in your pack") drops to its own line, full width */
 .gearFoot {
-  display: grid;
-  grid-template-columns: auto 1fr;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 14px;
-  margin-top: auto;
+  gap: 10px 14px;
   padding-top: 16px;
+}
+
+.gearFoot > :last-child {
+  flex: 1 0 auto;
+  width: auto;
 }
 
 .gearPrice {
@@ -660,9 +691,8 @@ a.buyState:hover {
   .gearFacts dd {
     font-size: 11.5px;
   }
-  .gearFoot {
-    grid-template-columns: 1fr;
-    gap: 10px;
+  .gearFoot > :last-child {
+    flex-basis: 100%;
   }
 }
 

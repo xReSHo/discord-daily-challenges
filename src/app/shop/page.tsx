@@ -115,7 +115,7 @@ export default async function ShopPage({
             </span>
             <Link href="/me#pack" className={styles.packLink}>
               <Backpack size={14} />
-              Your pack
+              <span className={styles.packText}>Your pack</span>
               <b>{carried}</b>
               <ArrowRight size={12} />
             </Link>
