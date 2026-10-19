@@ -17,12 +17,18 @@ export default auth(async (req) => {
   const { pathname } = req.nextUrl;
   const isPage = (req.method === "GET" || req.method === "HEAD") && !req.headers.has("next-action");
   if (pathname.startsWith("/api") || !isPage) {
-    return NextResponse.json({ error: CAUGHT_MESSAGE }, { status: 403 });
+    return NextResponse.json(
+      { error: CAUGHT_MESSAGE },
+      { status: 403, headers: { "Cache-Control": "no-store" } },
+    );
   }
 
   const headers = new Headers(req.headers);
   headers.set(CAUGHT_HEADER, "1");
-  return NextResponse.rewrite(new URL("/caught", req.url), { request: { headers } });
+  const res = NextResponse.rewrite(new URL("/caught", req.url), { request: { headers } });
+  // never kept by the browser: once the role is gone, the next load is the real page
+  res.headers.set("Cache-Control", "no-store");
+  return res;
 });
 
 export const config = {
