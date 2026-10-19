@@ -66,6 +66,27 @@ export function removeRole(userId: string, roleId: string, reason: string): Prom
   return roleCall("DELETE", userId, roleId, reason);
 }
 
+/**
+ * The roles a member holds in the guild: [] when they aren't in it, or
+ * undefined when Discord couldn't be asked (no token, timeout, rate limit).
+ */
+export async function memberRoles(userId: string): Promise<string[] | undefined> {
+  const c = credentials();
+  if (!c || !/^\d{5,25}$/.test(userId)) return undefined;
+  try {
+    const res = await fetch(`${API}/guilds/${c.guildId}/members/${userId}`, {
+      headers: { Authorization: `Bot ${c.token}` },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    if (res.status === 404) return [];
+    if (!res.ok) return undefined;
+    const member = (await res.json()) as { roles?: string[] };
+    return Array.isArray(member.roles) ? member.roles : [];
+  } catch {
+    return undefined;
+  }
+}
+
 /** Whether the bot token + guild are configured (shop can grant on the site). */
 export function discordConfigured(): boolean {
   return credentials() !== null;
