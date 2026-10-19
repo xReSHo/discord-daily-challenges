@@ -142,6 +142,7 @@ export async function AppFrame({
         <footer className={styles.footer}>
           <div className={`container ${styles.footerInner}`}>
             <span className="mono">one grace per day</span>
+            <span className="mono">voices by ElevenLabs</span>
             <span className="mono">{new Date().getUTCFullYear()}</span>
           </div>
         </footer>

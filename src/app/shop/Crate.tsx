@@ -19,6 +19,7 @@ import {
 import { RARITIES, SLOTS, pieceArt, type Rarity, type SlotId } from "@/lib/equipment";
 import { CRATE_NAME, emptyChance, type CrateResult, type CrateTerms } from "@/lib/crate";
 import { play } from "@/lib/sfx";
+import { speak } from "@/lib/voice";
 import styles from "./crate.module.css";
 
 /** Set once the pictures are in public/art (see scripts/cut-item-art.mjs). */
@@ -190,6 +191,7 @@ export function Crate({
         later(() => {
           setPhase("reveal");
           if (got.outcome === "new") play("found");
+          if (got.outcome === "new" && got.piece?.rarity === "legendary") speak("legendary");
           else if (got.outcome === "repeat") play("coin");
           else play("empty");
           router.refresh(); // the purse and the equipment both changed

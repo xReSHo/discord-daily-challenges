@@ -39,6 +39,7 @@ import { BossCountdown } from "./BossCountdown";
 import { TrialGate } from "./TrialGate";
 import { SecondChance } from "./SecondChance";
 import { SECOND_CHANCE_SECTIONS, charmCount } from "@/lib/shop/charms";
+import { PerfectDayVoice } from "./PerfectDayVoice";
 import styles from "./dashboard.module.css";
 
 function bossTimeLeft(expiresAt: string): string {
@@ -249,6 +250,7 @@ export default async function Dashboard() {
       </PageHero>
 
       <div className="container">
+        {discordId && sectionIds.length > 0 && doneCount === sectionIds.length && <PerfectDayVoice />}
         <Suspense fallback={null}>
           <RaidBanner discordId={discordId} />
         </Suspense>

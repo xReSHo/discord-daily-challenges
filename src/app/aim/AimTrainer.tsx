@@ -15,6 +15,7 @@ import {
   type AimLayout,
 } from "@/lib/aim/rules";
 import { play } from "@/lib/sfx";
+import { speakTrial } from "@/lib/voice";
 import styles from "./aim.module.css";
 
 type Phase = "idle" | "countdown" | "playing" | "submitting" | "done";
@@ -177,6 +178,7 @@ export function AimTrainer({
       const data = (await res.json()) as SubmitResponse;
       setResult(data);
       play(data.ok ? "win" : "lose");
+      if (data.ok || data.failed) speakTrial("aim", data.ok);
       if (!data.ok) {
         if (data.failed) setLocked(true);
         if (data.tries != null) setTries(data.tries);

@@ -7,6 +7,7 @@ import type { GameView } from "@/lib/wordle/game";
 import type { Mark } from "@/lib/wordle/evaluate";
 import type { CompleteResult } from "@/lib/completions";
 import { play } from "@/lib/sfx";
+import { speakTrial } from "@/lib/voice";
 import styles from "./wordle.module.css";
 
 const KEY_ROWS = ["qwertyuiop", "asdfghjkl", "zxcvbnm"];
@@ -92,6 +93,7 @@ export function WordleBoard({
       const v = data.view as GameView;
       if (v.status === "won") play("win");
       else if (v.status === "lost") play("lose");
+      if (v.status === "won" || v.status === "lost") speakTrial("wordle", v.status === "won");
       setCurrent("");
     } catch {
       flashError("Network error - try again");

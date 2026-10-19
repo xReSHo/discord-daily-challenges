@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { speakTrial } from "@/lib/voice";
 import { useRouter } from "next/navigation";
 import styles from "./litany.module.css";
 
@@ -103,6 +104,7 @@ export function LitanyGame({
       const data = (await res.json()) as SubmitResponse;
       setResult(data);
       if (!data.ok && (data.lostPrize || data.locked)) setLocked(true);
+      if (data.ok || data.lostPrize || data.locked) speakTrial("litany", data.ok);
     } catch {
       setError("Network error submitting the rite. Try again.");
     } finally {

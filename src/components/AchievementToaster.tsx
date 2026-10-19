@@ -5,6 +5,7 @@ import { AchievementIcon, type AchievementToast } from "@/lib/achievements/catal
 import type { DropToast } from "@/lib/equipment-drops";
 import { pieceArt, rarityName } from "@/lib/equipment";
 import { play } from "@/lib/sfx";
+import { achievementLine, speakOnce } from "@/lib/voice";
 import styles from "./AchievementToaster.module.css";
 
 const SHOW_MS = 3000;
@@ -69,6 +70,14 @@ export function AchievementToaster() {
   useEffect(() => {
     if (!current) return;
     play(current.kind === "feat" ? "feat" : "found");
+    // a streak milestone, or a new legendary piece: the narrator marks it
+    const line =
+      current.kind === "feat"
+        ? achievementLine(current.key)
+        : current.rarity === "legendary" && !current.duplicate
+          ? "legendary"
+          : null;
+    if (line) speakOnce(line, `toast:${current.key}`);
     const t = setTimeout(() => setQueue((q) => q.slice(1)), SHOW_MS);
     return () => clearTimeout(t);
   }, [current]);

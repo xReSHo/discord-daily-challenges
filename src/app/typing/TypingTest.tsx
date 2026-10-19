@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { speakTrial } from "@/lib/voice";
 import { useRouter } from "next/navigation";
 import styles from "./typing.module.css";
 
@@ -118,6 +119,7 @@ export function TypingTest({
         });
         const data = (await res.json()) as SubmitResponse;
         setResult(data);
+        if (data.ok || data.failed) speakTrial("typing", data.ok);
         if (!data.ok) {
           if (data.failed) setLocked(true);
           if (data.prize != null) setPrize(data.prize);

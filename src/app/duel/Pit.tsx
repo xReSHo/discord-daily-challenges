@@ -27,6 +27,7 @@ import {
 } from "@/lib/duel/rules";
 import { Face } from "@/app/leaderboard/Face";
 import { play } from "@/lib/sfx";
+import { speakOnce } from "@/lib/voice";
 import styles from "./duel.module.css";
 
 const QUICK = [1000, 5000, 25000, 100000];
@@ -495,6 +496,10 @@ function Replay({ duel, onClose }: { duel: DuelResult; onClose: () => void }) {
   useEffect(() => {
     if (done) {
       play(duel.outcome === "win" ? "found" : "tap");
+      // the verdict, spoken the first time this duel is watched (a draw says nothing)
+      if (duel.id && duel.outcome !== "draw") {
+        speakOnce(duel.outcome === "win" ? "duel-won" : "duel-lost", `duel:${duel.id}`);
+      }
       return;
     }
     const t = setTimeout(() => {
@@ -502,7 +507,7 @@ function Replay({ duel, onClose }: { duel: DuelResult; onClose: () => void }) {
       setUpTo((n) => n + 1);
     }, upTo === 0 ? 500 : ROUND_MS);
     return () => clearTimeout(t);
-  }, [upTo, done, duel.outcome]);
+  }, [upTo, done, duel.outcome, duel.id]);
 
   const seen = duel.rounds.slice(0, upTo);
   const me = seen.filter((r) => r.win === "me").length;

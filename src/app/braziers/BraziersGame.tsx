@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Flame } from "lucide-react";
 import { ALL_LIT, CELLS, isLit, litCount, touch, touchMask } from "@/lib/braziers/rules";
 import { play } from "@/lib/sfx";
+import { speakTrial } from "@/lib/voice";
 import styles from "./braziers.module.css";
 
 type Phase = "idle" | "starting" | "playing" | "submitting" | "done";
@@ -78,6 +79,7 @@ export function BraziersGame({
       if (typeof data?.ok !== "boolean") throw new Error("unexpected reply");
       setResult(data);
       play(data.ok ? "win" : "lose");
+      if (data.ok || data.failed) speakTrial("braziers", data.ok);
       if (!data.ok) {
         if (data.failed) setLocked(true);
         if (data.tries != null && data.maxTries != null) {

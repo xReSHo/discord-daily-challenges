@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { CAUGHT_HEADER } from "@/lib/alt-guard";
+import { CaughtVoice } from "./CaughtVoice";
 import styles from "./caught.module.css";
 
 export const metadata: Metadata = { title: "Caught · Daily Challenges", robots: { index: false } };
@@ -15,6 +16,7 @@ export default async function CaughtPage() {
 
   return (
     <main className="page-main">
+      <CaughtVoice />
       <div className={`container ${styles.wrap}`}>
         <div className={`panel panel--lit ornate ${styles.card}`}>
           <p className={styles.kicker}>A message lies on the ground</p>
@@ -42,6 +44,7 @@ export default async function CaughtPage() {
           </div>
         </div>
       </div>
+      <p className={styles.credit}>Voices by ElevenLabs</p>
     </main>
   );
 }

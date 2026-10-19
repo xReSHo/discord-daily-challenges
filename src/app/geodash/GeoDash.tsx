@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { speakTrial } from "@/lib/voice";
 import { useRouter } from "next/navigation";
 import { RotateCcw, Volume2, VolumeX } from "lucide-react";
 import {
@@ -332,6 +333,7 @@ export function GeoDash({ state }: { state: GeoState }) {
   const onDone = useCallback(
     (result: SubmitResult, difficulty: Difficulty, stake: number) => {
       setPhase({ k: "result", result, difficulty, stake });
+      if (result.ok || result.outcome === "spent") speakTrial("geodash", result.ok);
       router.refresh();
     },
     [router],

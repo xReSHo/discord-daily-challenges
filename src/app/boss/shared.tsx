@@ -1,11 +1,12 @@
 "use client";
 
-import { memo, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Coins, Skull, Swords, Timer, Users } from "lucide-react";
 import type { BossState, BossLeader } from "@/lib/boss/types";
 import { ArtImage } from "@/components/ArtImage";
 import { Spoils } from "@/components/Spoils";
+import { bossIntro, hush, speakOnce } from "@/lib/voice";
 import { KitBar, kitShows } from "./KitBar";
 import styles from "./boss.module.css";
 
@@ -68,6 +69,7 @@ export function Stage({
   children: React.ReactNode;
 }) {
   const pct = hp === undefined ? 0 : Math.max(0, Math.min(100, (hp / state.maxHp) * 100));
+  useBossVoice(state);
   return (
     <section
       className={`${styles.stage} ${focus ? styles.stageFocus : ""}`}
@@ -213,6 +215,27 @@ export const BossPortrait = memo(function BossPortrait({
     </button>
   );
 });
+
+/**
+ * The raid's spoken lines, each heard once per raid on this browser: the
+ * boss's own words while it stands, then the narrator when it falls or flees.
+ */
+function useBossVoice(state: BossState) {
+  const { bossKey, name, status, slain } = state;
+  const moment = slain ? "slain" : status === "active" ? "intro" : status === "ended" ? "escaped" : null;
+
+  useEffect(() => {
+    if (!moment || !bossKey) return;
+    if (moment === "intro") {
+      const line = bossIntro(name);
+      if (line) speakOnce(line, `intro:${bossKey}`);
+    } else {
+      speakOnce(moment === "slain" ? "boss-slain" : "boss-escaped", `${moment}:${bossKey}`);
+    }
+  }, [moment, bossKey, name]);
+
+  useEffect(() => hush, []);
+}
 
 export function AdminBar({ show, active }: { show: boolean; active: boolean }) {
   const [despawning, setDespawning] = useState(false);
