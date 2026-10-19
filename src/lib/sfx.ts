@@ -5,8 +5,8 @@
  * of low strings, all heard in a great stone hall with a long echo. No beeps,
  * and no music.
  *
- * The player can switch them off from the header; the choice is remembered on
- * this device.
+ * The player can switch them off, or turn them down, from the header's sound
+ * panel; the choice is remembered on this device (see sound-levels.ts).
  *
  * Client only. Every function is safe to call anywhere: without a browser,
  * with sound off, or before the player has touched the page (browsers allow
@@ -33,6 +33,8 @@ export type Sfx =
   | "lose"
   /** a crate with nothing in it */
   | "empty";
+
+import { level, watchLevels } from "@/lib/sound-levels";
 
 const KEY = "sfx";
 /** Everything is turned down to this: present, never loud. */
@@ -81,7 +83,11 @@ function audio(): AudioContext | null {
     if (!Ctor) return null;
     ctx = new Ctor();
     out = ctx.createGain();
-    out.gain.value = MASTER;
+    out.gain.value = MASTER * level("fx");
+    // the Effects slider, moved while sounds are about
+    watchLevels(() => {
+      if (ctx && out) out.gain.setTargetAtTime(MASTER * level("fx"), ctx.currentTime, 0.05);
+    });
     out.connect(ctx.destination);
 
     // two seconds of soft noise: the raw stuff of every whoosh and impact.
@@ -253,7 +259,7 @@ function strings(
 }
 
 export function play(name: Sfx): void {
-  if (!sfxOn()) return;
+  if (!sfxOn() || level("fx") === 0) return;
   const ac = audio();
   if (!ac) return;
 

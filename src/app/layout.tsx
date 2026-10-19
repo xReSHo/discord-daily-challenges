@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Cinzel, EB_Garamond, Inter, JetBrains_Mono } from "next/font/google";
+import { Ambience } from "@/components/Ambience";
 import { Atmosphere } from "@/components/Atmosphere";
 import { ClickSpark } from "@/components/ClickSpark";
 import { CookieNotice } from "@/components/CookieNotice";
@@ -74,6 +75,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <PageTransitions />
         {children}
         <CookieNotice />
+        <Ambience />
       </body>
     </html>
   );

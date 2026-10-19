@@ -43,12 +43,17 @@ const PRESETS: Record<Room, Preset> = {
 };
 
 /** Make-up gain after the compressor. */
-const LEVEL = 1.15;
+const LEVEL = 1;
+/** Each line rises in over this long (s), so it never starts with a jolt. */
+const FADE_IN = 0.35;
 
 let ctx: AudioContext | null = null;
 /** Where every room meets: the compressor. */
 let bus: AudioNode | null = null;
 let out: GainNode | null = null;
+/** The Voices level, applied here rather than on the audio element: iOS
+ *  ignores an element's volume, but not a gain in the chain. */
+let voiceLevel = 1;
 const rooms = new Map<Room, AudioNode>();
 
 function context(): AudioContext | null {
@@ -68,7 +73,7 @@ function context(): AudioContext | null {
   comp.attack.value = 0.006;
   comp.release.value = 0.25;
   out = ctx.createGain();
-  out.gain.value = LEVEL;
+  out.gain.value = LEVEL * voiceLevel;
   comp.connect(out).connect(ctx.destination);
   bus = comp;
   return ctx;
@@ -169,16 +174,35 @@ export function throughRoom(
   if (!ac) return null;
   try {
     const src = ac.createMediaElementSource(audio);
-    src.connect(room(ac, name));
+    const rise = ac.createGain();
+    rise.gain.value = 0;
+    src.connect(rise).connect(room(ac, name));
+    audio.addEventListener(
+      "playing",
+      () => {
+        rise.gain.cancelScheduledValues(ac.currentTime);
+        rise.gain.setValueAtTime(0, ac.currentTime);
+        rise.gain.linearRampToValueAtTime(1, ac.currentTime + FADE_IN);
+      },
+      { once: true },
+    );
     if (out) {
       out.gain.cancelScheduledValues(ac.currentTime);
-      out.gain.setValueAtTime(LEVEL, ac.currentTime);
+      out.gain.setValueAtTime(LEVEL * voiceLevel, ac.currentTime);
     }
     // the source lets go; the hall keeps ringing out on its own
     return { ctx: ac, release: () => src.disconnect() };
   } catch {
     return null;
   }
+}
+
+/** The Voices slider: every room follows it, even a line already speaking. */
+export function setRoomsLevel(v: number): void {
+  voiceLevel = v;
+  if (!ctx || !out) return;
+  out.gain.cancelScheduledValues(ctx.currentTime);
+  out.gain.setTargetAtTime(LEVEL * v, ctx.currentTime, 0.05);
 }
 
 /** Sound switched off: let even the ringing hall fall silent at once. */

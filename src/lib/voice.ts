@@ -1,10 +1,12 @@
 import { sfxOn, watchSfx } from "@/lib/sfx";
-import { silenceRooms, throughRoom, type Room } from "@/lib/voice-fx";
+import { level, watchLevels } from "@/lib/sound-levels";
+import { setRoomsLevel, silenceRooms, throughRoom, type Room } from "@/lib/voice-fx";
 
 /**
  * Spoken lines (public/voice, voiced with ElevenLabs): kept for the big
  * moments only, so they stay an event. They obey the same sound switch as the
- * effects, only one plays at a time, and each is heard once (see `speakOnce`).
+ * effects and their own Voices level, only one plays at a time, and each is
+ * heard once (see `speakOnce`).
  *
  * Each is played through a room (see voice-fx.ts): the bosses in a vast
  * stone hall, the narrator in a great one, a whisper close by.
@@ -33,7 +35,6 @@ export type VoiceLine =
   | "duel-lost"
   | "caught";
 
-const VOLUME = 0.85;
 
 /** Where each line is heard. */
 function roomFor(line: VoiceLine): Room {
@@ -64,9 +65,14 @@ function stop() {
  * back). If another is still speaking it is not cut off: this one follows it.
  */
 export function speak(line: VoiceLine, onStart?: () => void): void {
-  if (typeof window === "undefined" || !sfxOn()) return;
+  if (typeof window === "undefined" || !sfxOn() || level("voice") === 0) return;
   if (!watching) {
     watching = true;
+    // the Voices slider, moved mid-line
+    watchLevels(() => {
+      setRoomsLevel(level("voice"));
+      if (current && current.volume !== 1) current.volume = level("voice");
+    });
     // switching sound off silences a line mid-sentence
     watchSfx(() => {
       if (!sfxOn()) {
@@ -81,9 +87,11 @@ export function speak(line: VoiceLine, onStart?: () => void): void {
   }
   stop();
   const audio = new Audio(`/voice/${line}.mp3`);
-  audio.volume = VOLUME;
   current = audio;
+  setRoomsLevel(level("voice"));
   const fx = throughRoom(audio, roomFor(line));
+  // through a room the level is a gain in the chain; played dry, the element's own
+  audio.volume = fx ? 1 : level("voice");
   audio.addEventListener("ended", () => {
     fx?.release();
     if (current !== audio) return;
